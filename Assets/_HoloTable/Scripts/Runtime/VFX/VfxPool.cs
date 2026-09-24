@@ -22,23 +22,23 @@ namespace HoloTable.VFX
         }
 
         /// <summary>Plays a pooled copy of <paramref name="prefab"/>. No-op for a null prefab.</summary>
-        public static ParticleSystem Play(ParticleSystem prefab, Vector3 position, Quaternion rotation, float scale = 1f, Color? tint = null)
+        /// <param name="lifetime">Seconds before the instance returns to the pool. Default: duration + max start lifetime.
+        /// Pass it explicitly for effects the caller keeps alive and stops itself (e.g. a looping cocoon).</param>
+        public static ParticleSystem Play(ParticleSystem prefab, Vector3 position, Quaternion rotation, float scale = 1f, Color? tint = null, float? lifetime = null)
         {
             if (prefab == null) return null;
 
             ParticleSystem fx = GetPool(prefab).Get();
+            PooledVfx handle = fx.GetComponent<PooledVfx>();
             fx.transform.SetPositionAndRotation(position, rotation);
             fx.transform.localScale = Vector3.one * scale;
-            if (tint.HasValue)
-            {
-                ParticleSystem.MainModule main = fx.main;
-                main.startColor = tint.Value;
-            }
+
+            ParticleSystem.MainModule main = fx.main;
+            main.startColor = tint.HasValue ? new ParticleSystem.MinMaxGradient(tint.Value) : handle.OriginalColor;
 
             fx.Clear(true);
             fx.Play(true);
-            PooledVfx handle = fx.GetComponent<PooledVfx>();
-            handle.Arm(fx.main.duration + fx.main.startLifetime.constantMax + 0.25f);
+            handle.Arm(lifetime ?? main.duration + main.startLifetime.constantMax + 0.25f);
             return fx;
         }
 
@@ -69,6 +69,9 @@ namespace HoloTable.VFX
                 () =>
                 {
                     ParticleSystem fx = Object.Instantiate(prefab, _root);
+                    // The pool owns the lifetime: a Disable/Destroy stop action would bypass it.
+                    ParticleSystem.MainModule main = fx.main;
+                    main.stopAction = ParticleSystemStopAction.None;
                     fx.gameObject.AddComponent<PooledVfx>().Bind(pool);
                     return fx;
                 },
@@ -92,10 +95,13 @@ namespace HoloTable.VFX
         private float _releaseAt;
         private bool _armed;
 
+        internal ParticleSystem.MinMaxGradient OriginalColor { get; private set; }
+
         internal void Bind(ObjectPool<ParticleSystem> pool)
         {
             _pool = pool;
             _system = GetComponent<ParticleSystem>();
+            OriginalColor = _system.main.startColor; // restored for untinted plays
         }
 
         internal void Arm(float seconds)

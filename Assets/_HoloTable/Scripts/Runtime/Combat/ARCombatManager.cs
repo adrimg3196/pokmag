@@ -97,7 +97,9 @@ namespace HoloTable.Combat
 
         private void OnDisable()
         {
-            // Coroutines die with the component: never leave a caller waiting on OnResolved.
+            // Disabling a component does not stop its coroutines: stop them, then resolve every
+            // pending request as missed so no caller waits on OnResolved forever.
+            StopAllCoroutines();
             int dropped = _queue.Count + _inFlight.Count;
             foreach (AttackRequest r in new List<AttackRequest>(_inFlight)) Complete(r, new AttackReport(r.Attacker, r.Defender, 0, false, false, Vector3.zero));
             while (_queue.Count > 0)

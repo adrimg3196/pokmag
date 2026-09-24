@@ -112,6 +112,14 @@ namespace HoloTable.Games.Warhammer
         }
 
         /// <summary>Moves the held cluster (hand grab / screen drag).</summary>
+        /// <summary>Abandons the current request (caller falls back to virtual dice). Frees the tray.</summary>
+        public void Cancel()
+        {
+            _request = null;
+            _rollSerial++;
+            ClearDice();
+        }
+
         public void HoldAt(Vector3 position, Quaternion rotation)
         {
             if (!IsAwaitingThrow) return;
@@ -168,9 +176,16 @@ namespace HoloTable.Games.Warhammer
                     Debug.LogWarning("[HoloTable] A die fell below the table. Enable 'Build Physics Surface' or align the TableSpace to the real table.", this);
                 }
 
-                die.Hold(PickupPoint, Quaternion.identity);
-                die.Throw(table.Normal * 0.3f, UnityEngine.Random.insideUnitSphere * 20f);
-                return;
+                if (die.RerollCount < maxCockedRerolls)
+                {
+                    die.RerollCount++;
+                    die.Hold(PickupPoint, Quaternion.identity);
+                    die.Throw(table.Normal * 0.3f, UnityEngine.Random.insideUnitSphere * 20f);
+                    return;
+                }
+
+                // Out of retries: bring it back onto the tray and accept its face.
+                die.Hold(TrayCenter + table.Normal * dieSize, die.transform.rotation);
             }
 
             if (die.IsCocked && die.RerollCount < maxCockedRerolls)

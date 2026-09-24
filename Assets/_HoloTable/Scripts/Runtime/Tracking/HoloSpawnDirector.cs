@@ -41,6 +41,7 @@ namespace HoloTable.Tracking
         private sealed class Orphan
         {
             public LivingEntityController Entity;
+            public string InstanceId;
             public float ExpiresAt;
             public Vector3 LastPosition;
         }
@@ -159,7 +160,7 @@ namespace HoloTable.Tracking
         /// <summary>Card / miniature seen (or seen again). Safe to call every frame.</summary>
         public void ReportFound(string instanceId, string referenceName, Transform anchor, Vector2 physicalSize)
         {
-            if (string.IsNullOrEmpty(instanceId)) return;
+            if (string.IsNullOrEmpty(instanceId) || !isActiveAndEnabled) return;
 
             if (_entries.TryGetValue(instanceId, out TargetEntry entry))
             {
@@ -188,6 +189,7 @@ namespace HoloTable.Tracking
                 // Same physical card put straight back (KO'd creature, cast spell): don't replay it.
                 entry.Resolved = true;
                 entry.Spent = true;
+                if (anchor != null) DamagePopupService.ShowInfo(anchor.position + Vector3.up * 0.05f, "Carta ya usada");
                 Log($"'{referenceName}' is spent; ignoring re-detection.");
                 return;
             }
@@ -204,6 +206,8 @@ namespace HoloTable.Tracking
         /// <summary>Card no longer visible. The hologram leaves its card after the grace period.</summary>
         public void ReportLost(string instanceId)
         {
+            // During scene teardown adapters may report after the director was disabled.
+            if (!isActiveAndEnabled) return;
             if (string.IsNullOrEmpty(instanceId) || !_entries.TryGetValue(instanceId, out TargetEntry entry)) return;
             if (entry.Target.Status == TrackingStatus.Lost) return;
 
@@ -389,6 +393,7 @@ namespace HoloTable.Tracking
                 _orphans.Add(new Orphan
                 {
                     Entity = entity,
+                    InstanceId = entry.Target.InstanceId,
                     ExpiresAt = Time.time + persistence,
                     LastPosition = entry.Target.HasAnchor ? entry.Target.Position : entity.GroundWorld,
                 });
@@ -408,11 +413,23 @@ namespace HoloTable.Tracking
             float bestDistance = float.MaxValue;
             bool ignoreDistance = definition.System == GameSystem.Warhammer;
 
+            // 1) Same physical target (stable trackable / observer id): unambiguous.
             for (int i = 0; i < _orphans.Count; i++)
             {
                 LivingEntityController candidate = _orphans[i].Entity;
+                if (candidate != null && candidate.IsAlive && _orphans[i].InstanceId == entry.Target.InstanceId)
+                {
+                    best = i;
+                    break;
+                }
+            }
+
+            // 2) Same definition, same owner; distance relaxed only for moved miniatures.
+            for (int i = 0; best < 0 && i < _orphans.Count; i++)
+            {
+                LivingEntityController candidate = _orphans[i].Entity;
                 if (candidate == null || !candidate.IsAlive || candidate.Definition != definition) continue;
-                if (side != PlayerSide.Neutral && candidate.Side != side && !ignoreDistance) continue;
+                if (side != PlayerSide.Neutral && candidate.Side != side) continue;
 
                 float d = table.TableDistance(_orphans[i].LastPosition, entry.Target.Position);
                 if ((ignoreDistance || d <= reattachMaxDistance) && d < bestDistance)
@@ -423,6 +440,7 @@ namespace HoloTable.Tracking
             }
 
             if (best < 0) return false;
+            if (bestDistance == float.MaxValue) bestDistance = 0f;
 
             LivingEntityController entity = _orphans[best].Entity;
             _orphans.RemoveAt(best);
@@ -445,8 +463,14 @@ namespace HoloTable.Tracking
 
         private void OnEntityDied(LivingEntityController entity)
         {
-            // KO'd while its card is still on the table: don't resurrect on re-detection.
-            RemoveOrphan(entity);
+            // KO'd while its card is still on the table (or while a ghost): don't resurrect on re-detection.
+            int orphan = FindOrphanIndex(entity);
+            if (orphan >= 0)
+            {
+                if (spentMemorySeconds > 0f) _spentMemory[_orphans[orphan].InstanceId] = Time.time + spentMemorySeconds;
+                _orphans.RemoveAt(orphan);
+            }
+
             if (_entryByEntity.TryGetValue(entity, out TargetEntry entry))
             {
                 entry.Entity = null;

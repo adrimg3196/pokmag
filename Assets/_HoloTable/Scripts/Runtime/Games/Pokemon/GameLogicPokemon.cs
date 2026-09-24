@@ -287,7 +287,8 @@ namespace HoloTable.Games.Pokemon
 
             if (evolutionSfx != null) AudioSource.PlayClipAtPoint(evolutionSfx, center);
             float fxScale = Mathf.Max(0.5f, previous.WorldHeight / 0.1f);
-            ParticleSystem cocoon = VfxPool.Play(evolutionCocoonVfx, previous.GroundWorld, Quaternion.identity, fxScale);
+            // The routine stops the cocoon itself; keep the pooled instance for the whole sequence + fade.
+            ParticleSystem cocoon = VfxPool.Play(evolutionCocoonVfx, previous.GroundWorld, Quaternion.identity, fxScale, null, evolutionDuration + 3f);
 
             EnvironmentDimmer.Current.Pulse(0.45f, 0.4f, evolutionDuration * 0.7f, 0.8f);
 

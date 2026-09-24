@@ -105,7 +105,8 @@ namespace HoloTable.Games.Warhammer
         private void OnDisable()
         {
             HoloSpawnDirector.UnregisterModule(this);
-            _busy = false; // coroutines stop with the component; never stay locked
+            StopAllCoroutines(); // disabling a component does not stop its coroutines by itself
+            _busy = false;
         }
 
         // ─────────────────────────────── IGameRuleModule ───────────────────────────────
@@ -156,6 +157,8 @@ namespace HoloTable.Games.Warhammer
         public void SetTarget(LivingEntityController enemy)
         {
             if (Selected == null || enemy == null || !Selected.Side.IsRivalOf(enemy.Side) || _busy) return;
+            if (Target != null && Target != enemy) Target.SetStatusTag("");
+            _lastTargetTagKey = int.MinValue;
             Target = enemy;
             _nextLos = 0f;
             TargetLocked?.Invoke(Selected, enemy);
@@ -479,6 +482,7 @@ namespace HoloTable.Games.Warhammer
                 if (result.Values != null) yield break;
 
                 Debug.LogWarning("[HoloTable] Physical dice never settled; using virtual dice. Check the DiceTray surface/colliders.", diceTray);
+                diceTray.Cancel(); // free the tray so later rolls can use physical dice again
             }
 
             result.Values = _fallbackDice.RollD6(count);
