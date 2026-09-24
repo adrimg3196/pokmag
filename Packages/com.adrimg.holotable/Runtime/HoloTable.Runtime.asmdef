@@ -3,7 +3,8 @@
     "rootNamespace": "HoloTable",
     "references": [
         "HoloTable.Domain",
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

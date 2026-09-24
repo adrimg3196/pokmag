@@ -287,7 +287,7 @@ namespace HoloTable.Adapters
             };
 
             GameObject face = GameObject.CreatePrimitive(isMini ? PrimitiveType.Cylinder : PrimitiveType.Quad);
-            DestroyImmediate(face.GetComponent<Collider>());
+            RemoveCollider(face);
             face.transform.SetParent(root, false);
             if (isMini)
             {
@@ -345,7 +345,8 @@ namespace HoloTable.Adapters
                 bool covered = false;
                 for (int j = i + 1; j < _cards.Count && !covered; j++)
                 {
-                    covered = table.TableDistance(lower.Root.position, _cards[j].Root.position) < CardSize.x * 0.5f;
+                    float overlap = Mathf.Max(Mathf.Min(lower.Footprint, CardSize.x), Mathf.Min(_cards[j].Footprint, CardSize.x)) * 0.5f;
+                    covered = table.TableDistance(lower.Root.position, _cards[j].Root.position) < overlap;
                 }
 
                 if (covered == lower.Covered) continue;
@@ -356,7 +357,7 @@ namespace HoloTable.Adapters
 
         private void SetCardVisible(SimCard card, bool visible)
         {
-            foreach (Renderer r in card.Root.GetComponentsInChildren<Renderer>()) r.enabled = visible || card.Covered;
+            foreach (Renderer r in card.Root.GetComponentsInChildren<Renderer>()) r.enabled = visible;
             if (!visible) _director.ReportLost(card.Id);
         }
 
@@ -403,6 +404,14 @@ namespace HoloTable.Adapters
 
             point = default;
             return false;
+        }
+
+        private static void RemoveCollider(GameObject go)
+        {
+            Collider c = go.GetComponent<Collider>();
+            if (c == null) return;
+            c.enabled = false; // ignored by raycasts right away; destroyed at end of frame
+            Destroy(c);
         }
 
         private static string FirstReferenceName(EntityDefinition definition) =>

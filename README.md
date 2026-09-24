@@ -19,9 +19,12 @@ stack the evolution card, fly over the board, cast room-darkening spells and rol
 1. Unity 2021.3.18+ (2022.3 LTS or Unity 6 recommended), any 3D/URP project.
 2. **Window ▸ Package Manager ▸ + ▸ Add package from git URL…**
    ```
-   https://github.com/adrimg3196/pokmag.git?path=/Packages/com.adrimg.holotable
+   https://github.com/adrimg3196/pokmag.git?path=/Packages/com.adrimg.holotable#v0.2.0
    ```
+   (drop `#v0.2.0` to track the latest `main`)
 3. Menu **HoloTable ▸ Create Demo Scene** → imports the demo cards and TextMeshPro essentials and builds a wired scene.
+   The desktop simulator uses Unity's **Input System** (included in Unity 6 templates); if it's missing, the wizard
+   offers to install it.
 4. Press **Play**. The desktop simulator lets you place virtual cards with the mouse and play all three games.
    Cards without a 3D model spawn a procedural placeholder hologram.
 
@@ -72,13 +75,14 @@ flowchart LR
 ```
 
 - **Domain** has no `UnityEngine` reference and is tested with `dotnet test`.
-- **Adapters** each live in their own assembly and only compile when their SDK package is installed.
+- **Adapters** each live in their own assembly and only compile when their SDK package is installed
+  (AR Foundation, Vuforia, XR Hands and Input System are all optional).
 - **Games** implement `IGameRuleModule`; adding Lorcana or Yu-Gi-Oh is another module.
 
 ## Going to real AR
 
-Follow [Docs/SETUP_TRACKING.md](Docs/SETUP_TRACKING.md) (Vuforia, AR Foundation, Meta Quest 3) and
-[Docs/FOLDER_STRUCTURE.md](Docs/FOLDER_STRUCTURE.md). Create cards with *Create ▸ HoloTable ▸ …*, set
+Follow [Docs/SETUP_TRACKING.md](Docs/SETUP_TRACKING.md) *(in Spanish)* (Vuforia, AR Foundation, Meta Quest 3) and
+[Docs/FOLDER_STRUCTURE.md](Docs/FOLDER_STRUCTURE.md) *(in Spanish)*. Create cards with *Create ▸ HoloTable ▸ …*, set
 *Reference Image Names* to the names in your image library, optionally assign a `HOLO_*` prefab, and add them to a
 `CardCatalog`.
 
@@ -86,7 +90,7 @@ Follow [Docs/SETUP_TRACKING.md](Docs/SETUP_TRACKING.md) (Vuforia, AR Foundation,
 
 ```bash
 dotnet test  Tests/HoloTable.Domain.Tests      # rules
-dotnet build Tools/UnityCompileCheck           # all runtime + editor scripts vs UnityEngine/UnityEditor reference DLLs
+python3 Tools/UnityCompileCheck/check.py      # compiles each asmdef separately, like Unity (reference DLLs + SDK stubs)
 python3 Tools/generate_meta.py --check         # every package file has a .meta (required for git installs)
 ```
 

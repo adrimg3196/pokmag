@@ -35,7 +35,7 @@ You do **not** need Unity to work on rules. You do need it to try gameplay.
 
 ```bash
 dotnet test  Tests/HoloTable.Domain.Tests      # rules
-dotnet build Tools/UnityCompileCheck           # every script, warnings are errors
+python3 Tools/UnityCompileCheck/check.py      # every asmdef compiled like Unity, warnings are errors
 python3 Tools/generate_meta.py                 # create .meta files for new files (required!)
 python3 Tools/generate_meta.py --check
 ```
@@ -48,7 +48,7 @@ CI runs the same commands on every pull request.
 - Serialized enums: explicit values, only append.
 - Every coroutine wait has a timeout and logs a warning when it trips.
 - One-shot particles go through `VfxPool.Play`.
-- New SDK API used by an adapter → add its minimal signature to `Tools/UnityCompileCheck/Stubs`.
+- New SDK API used by an adapter → add its minimal signature to `Tools/UnityCompileCheck/Stubs/<AssemblyName>/`.
 - More detail for AI agents and humans alike: [CLAUDE.md](CLAUDE.md) and `.claude/skills/holotable-unity`.
 
 ## Adding a new game

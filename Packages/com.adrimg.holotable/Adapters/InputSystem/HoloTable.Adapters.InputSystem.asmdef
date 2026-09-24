@@ -3,6 +3,7 @@
     "rootNamespace": "HoloTable.Adapters",
     "references": [
         "HoloTable.Runtime",
+        "HoloTable.Domain",
         "Unity.InputSystem",
         "Unity.TextMeshPro"
     ],

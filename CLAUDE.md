@@ -30,9 +30,9 @@ archivos pequeños y cohesionados.
 
 ```bash
 dotnet test  Tests/HoloTable.Domain.Tests
-dotnet build Tools/UnityCompileCheck
+python3 Tools/UnityCompileCheck/check.py
 ```
 
 Ambos deben terminar sin errores ni warnings (`TreatWarningsAsErrors`). Tras crear ficheros en el paquete:
 `python3 Tools/generate_meta.py` (los paquetes instalados por git necesitan todos sus `.meta`). Si usas una API nueva de un SDK
-externo, añádela a `Tools/UnityCompileCheck/Stubs` con la firma real.
+externo, añádela a `Tools/UnityCompileCheck/Stubs/<AssemblyName>/` con la firma real.

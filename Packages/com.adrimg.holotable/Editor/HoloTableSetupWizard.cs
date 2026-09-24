@@ -50,6 +50,23 @@ namespace HoloTable.Editor
                 return;
             }
 
+            if (Type.GetType(SimulatorType) == null && !Application.isBatchMode)
+            {
+                // The desktop simulator lives in the optional Input System adapter.
+                int choice = EditorUtility.DisplayDialogComplex("HoloTable",
+                    "The desktop simulator (play without AR) needs Unity's Input System package.\n\n" +
+                    "Install it now? Unity will recompile; then run  HoloTable ▸ Create Demo Scene  again.\n" +
+                    "If Unity asks to enable the new input backend, choose 'Yes' (or set Player ▸ Active Input Handling to 'Both').",
+                    "Install Input System", "Cancel", "Continue without simulator");
+                if (choice == 0)
+                {
+                    UnityEditor.PackageManager.Client.Add("com.unity.inputsystem");
+                    return;
+                }
+
+                if (choice == 1) return;
+            }
+
             CardCatalog catalog = FindOrImportDemoCatalog();
             if (catalog == null)
             {
@@ -87,7 +104,7 @@ namespace HoloTable.Editor
             if (Type.GetType(SimulatorType) == null)
             {
                 problems++;
-                Debug.LogWarning("[HoloTable] Desktop simulator not compiled: install the Input System package and enable it in Player ▸ Active Input Handling.");
+                Debug.LogWarning("[HoloTable] Desktop simulator unavailable: install the Input System package (optional dependency) and set Player ▸ Active Input Handling to 'Input System Package' or 'Both'.");
             }
 
             foreach (string guid in AssetDatabase.FindAssets("t:" + nameof(CardCatalog)))

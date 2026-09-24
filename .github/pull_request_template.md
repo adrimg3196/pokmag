@@ -2,7 +2,7 @@
 
 ## How was it tested?
 - [ ] `dotnet test Tests/HoloTable.Domain.Tests`
-- [ ] `dotnet build Tools/UnityCompileCheck`
+- [ ] `python3 Tools/UnityCompileCheck/check.py`
 - [ ] `python3 Tools/generate_meta.py --check`
 - [ ] Tried in Unity (version / device):
 

@@ -5,8 +5,8 @@ Play every HoloTable feature in the Unity Editor (or a desktop build) with **no 
 exactly like a tracking SDK: placing = *found*, covering / lifting / removing = *lost*, rotating 90° = *tap*.
 
 Create it with **HoloTable ▸ Create Demo Scene**, or add the component to any scene that has a `HoloSpawnDirector`.
-It needs the Input System package (installed automatically) and *Player ▸ Active Input Handling* set to
-*Input System Package* or *Both*.
+It needs Unity's Input System package (optional dependency: included in Unity 6 templates, and the wizard offers to
+install it) and *Player ▸ Active Input Handling* set to *Input System Package* or *Both*.
 
 ## Controls
 

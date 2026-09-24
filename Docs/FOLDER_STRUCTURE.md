@@ -14,6 +14,7 @@ Packages/com.adrimg.holotable/          ← el paquete que instala la comunidad 
 
 Assets/                                 ← TU proyecto: contenido de cada juego, aislado
 ├── HoloTableDemo/                      escena generada por el asistente
+├── Samples/HoloTable XR/<versión>/Demo Cards/   cartas demo importadas (Package Manager ▸ Samples)
 ├── Games/
 │   ├── Pokemon/
 │   │   ├── Data/Catalog_Pokemon.asset

@@ -85,12 +85,14 @@ flowchart LR
 
 ## Instalación y demo en 2 minutos (sin hardware AR)
 
-Requisitos: Unity 2021.3.18+ (recomendado 2022.3 LTS o Unity 6). Las dependencias (uGUI, TextMeshPro, Input System) se instalan solas.
+Requisitos: Unity 2021.3.18+ (recomendado 2022.3 LTS o Unity 6). uGUI y TextMeshPro se instalan solos.
 
 1. En un proyecto 3D/URP: **Window ▸ Package Manager ▸ + ▸ Add package from git URL…** y pega:
    ```
-   https://github.com/adrimg3196/pokmag.git?path=/Packages/com.adrimg.holotable
+   https://github.com/adrimg3196/pokmag.git?path=/Packages/com.adrimg.holotable#v0.2.0
    ```
+   (quita `#v0.2.0` para seguir la última versión de `main`). El simulador usa **Input System** (viene en las plantillas de Unity 6);
+   si falta, el asistente ofrece instalarlo.
 2. Menú **HoloTable ▸ Create Demo Scene** (importa las cartas demo, los recursos de TextMeshPro y monta la escena).
 3. **Play**. Con el simulador de escritorio colocas cartas virtuales con el ratón y juegas a los tres juegos;
    los hologramas se generan con primitivas si la carta aún no tiene modelo 3D. Controles: [`Docs/DESKTOP_SIMULATOR.md`](Docs/DESKTOP_SIMULATOR.md).
@@ -110,7 +112,7 @@ Comandos útiles (públicos y sin parámetros para botones XR / UnityEvents):
 
 ```bash
 dotnet test  Tests/HoloTable.Domain.Tests     # 132 tests de reglas (C# 9, como Unity)
-dotnet build Tools/UnityCompileCheck          # compila TODOS los scripts contra UnityEngine 2021.3 (NuGet)
+python3 Tools/UnityCompileCheck/check.py     # compila cada asmdef por separado, como Unity
 ```
 
 `UnityCompileCheck` usa las DLL de referencia públicas de UnityEngine y *stubs* mínimos de TextMeshPro, uGUI, AR Foundation,

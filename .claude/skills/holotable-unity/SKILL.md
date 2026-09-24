@@ -39,13 +39,13 @@ Rules: HoloTable.Domain (pure C#, no UnityEngine, 100% unit-tested)
 ### Add a tracking SDK
 New folder `Scripts/Adapters/<Sdk>/` with its own asmdef (`versionDefines` + `defineConstraints`) that only calls
 `HoloSpawnDirector.Instance.ReportFound / ReportLimited / ReportLost`. Add the SDK's minimal API to
-`Tools/UnityCompileCheck/Stubs` with its real signatures.
+`Tools/UnityCompileCheck/Stubs/<AssemblyName>/` with its real signatures.
 
 ## Verification loop (run before every commit — the PostToolUse hook runs it too)
 
 ```bash
 dotnet test  Tests/HoloTable.Domain.Tests      # rules
-dotnet build Tools/UnityCompileCheck           # every Unity script, warnings as errors
+python3 Tools/UnityCompileCheck/check.py           # every Unity script, warnings as errors
 ```
 
 Then review with the project agents in `.claude/agents` (`csharp-reviewer`, `silent-failure-hunter`,

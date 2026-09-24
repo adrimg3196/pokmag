@@ -45,6 +45,7 @@ namespace HoloTable.Data
         /// <summary>
         /// False for spells, energies, lands… anything that should not become a creature.
         /// Creatures without a prefab still spawn, as a procedural placeholder hologram.
+        /// Non-creature definition types (terrain, objectives…) MUST override this to return false.
         /// </summary>
         public virtual bool SpawnsCreature => true;
 

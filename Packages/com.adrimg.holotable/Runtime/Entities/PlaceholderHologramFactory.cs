@@ -106,7 +106,10 @@ namespace HoloTable.Entities
         {
             GameObject go = GameObject.CreatePrimitive(type);
             go.name = name;
-            Object.DestroyImmediate(go.GetComponent<Collider>()); // no physics: LoS, dice and taps ignore holograms
+            // No physics: LoS rays, dice and taps must ignore holograms. Disabled now, destroyed end of frame.
+            Collider collider = go.GetComponent<Collider>();
+            collider.enabled = false;
+            Object.Destroy(collider);
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPosition;
             go.transform.localScale = localScale;
@@ -114,6 +117,8 @@ namespace HoloTable.Entities
             return go.transform;
         }
 
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
         private static Shader _primitiveShader;
 
         private static Material CreateMaterial(Color color)
@@ -122,11 +127,16 @@ namespace HoloTable.Entities
             {
                 // Same shader the active render pipeline uses for primitives (Standard, URP Lit…).
                 GameObject probe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                probe.SetActive(false);
                 _primitiveShader = probe.GetComponent<MeshRenderer>().sharedMaterial.shader;
-                Object.DestroyImmediate(probe);
+                Object.Destroy(probe);
             }
 
-            return new Material(_primitiveShader) { color = color, name = "HoloPlaceholder" };
+            var material = new Material(_primitiveShader) { name = "HoloPlaceholder" };
+            // URP/HDRP Lit use _BaseColor, Built-in Standard uses _Color: set whichever exists.
+            if (material.HasProperty(BaseColorId)) material.SetColor(BaseColorId, color);
+            if (material.HasProperty(ColorId)) material.SetColor(ColorId, color);
+            return material;
         }
     }
 

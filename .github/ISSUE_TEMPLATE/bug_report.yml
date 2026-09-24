@@ -13,7 +13,12 @@ body:
     id: game
     attributes:
       label: Game module
-      options: [Pokémon, Magic: The Gathering, Warhammer 40K, Core / tracking, Other]
+      options:
+        - "Pokémon"
+        - "Magic: The Gathering"
+        - "Warhammer 40K"
+        - "Core / tracking"
+        - "Other"
     validations:
       required: true
   - type: input

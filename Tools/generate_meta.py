@@ -55,13 +55,48 @@ def missing_metas():
                 yield path, False
 
 
+def orphan_metas():
+    for dirpath, _, filenames in os.walk(ROOT):
+        for name in filenames:
+            if name.endswith(".meta") and not os.path.exists(os.path.join(dirpath, name[:-5])):
+                yield os.path.join(dirpath, name)
+
+
+def duplicate_guids():
+    seen = {}
+    for dirpath, _, filenames in os.walk(ROOT):
+        for name in filenames:
+            if not name.endswith(".meta"):
+                continue
+            path = os.path.join(dirpath, name)
+            with open(path, encoding="utf-8") as handle:
+                for line in handle:
+                    if line.startswith("guid:"):
+                        guid = line.split(":", 1)[1].strip()
+                        if guid in seen:
+                            yield guid, seen[guid], path
+                        seen[guid] = path
+                        break
+
+
 def main() -> int:
     check = "--check" in sys.argv
     missing = list(missing_metas())
     if check:
+        errors = 0
         for path, _ in missing:
             print(f"missing .meta: {os.path.relpath(path, ROOT)}")
-        return 1 if missing else 0
+            errors += 1
+        for path in orphan_metas():
+            print(f"orphan .meta (no asset): {os.path.relpath(path, ROOT)}")
+            errors += 1
+        for guid, first, second in duplicate_guids():
+            print(f"duplicate guid {guid}: {os.path.relpath(first, ROOT)} and {os.path.relpath(second, ROOT)}")
+            errors += 1
+        if os.path.exists(os.path.join(ROOT, "Samples~.meta")):
+            print("Samples~.meta must not exist")
+            errors += 1
+        return 1 if errors else 0
 
     for path, is_dir in missing:
         with open(path + ".meta", "w", encoding="utf-8") as handle:
