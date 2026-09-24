@@ -1,0 +1,15 @@
+name: Feature request
+description: A new rule, game, adapter or effect
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Official rule reference (if it is a game rule)
+      description: Rulebook / comprehensive rules section, so it can be tested.

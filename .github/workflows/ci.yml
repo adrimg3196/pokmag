@@ -14,8 +14,23 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Every package file has a committed .meta (required for git-URL installs)
+        run: python3 Tools/generate_meta.py --check
+
+      - name: package.json is valid
+        run: |
+          python3 - <<'PY'
+          import json, re
+          d = json.load(open("Packages/com.adrimg.holotable/package.json"))
+          assert re.fullmatch(r"com\.[a-z0-9-]+\.[a-z0-9.-]+", d["name"]), d["name"]
+          assert re.fullmatch(r"\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?", d["version"]), d["version"]
+          for s in d.get("samples", []):
+              import os; assert os.path.isdir(os.path.join("Packages/com.adrimg.holotable", s["path"])), s["path"]
+          print("package.json OK", d["name"], d["version"])
+          PY
+
       - name: Domain rules unit tests (xUnit, C# 9 like Unity)
         run: dotnet test Tests/HoloTable.Domain.Tests --nologo
 
-      - name: Compile all Unity scripts against UnityEngine reference assemblies
-        run: dotnet build Tools/UnityCompileCheck --nologo
+      - name: Compile every asmdef separately, like Unity (UnityEngine/UnityEditor reference DLLs + SDK stubs)
+        run: python3 Tools/UnityCompileCheck/check.py

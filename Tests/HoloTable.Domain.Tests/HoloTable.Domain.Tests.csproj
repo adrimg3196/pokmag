@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../Assets/_HoloTable/Scripts/Domain/**/*.cs" Link="Domain/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="../../Packages/com.adrimg.holotable/Domain/**/*.cs" Link="Domain/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

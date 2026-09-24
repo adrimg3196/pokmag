@@ -35,3 +35,6 @@ TestResults/
 # OS
 .DS_Store
 Thumbs.db
+
+# Generated per-assembly compile-check projects
+Tools/UnityCompileCheck/Generated/

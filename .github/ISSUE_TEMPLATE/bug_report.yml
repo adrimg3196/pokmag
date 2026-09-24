@@ -1,0 +1,41 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: game
+    attributes:
+      label: Game module
+      options:
+        - "Pokémon"
+        - "Magic: The Gathering"
+        - "Warhammer 40K"
+        - "Core / tracking"
+        - "Other"
+    validations:
+      required: true
+  - type: input
+    id: unity
+    attributes:
+      label: Unity version and render pipeline
+      placeholder: "6000.0.40f1, URP"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Device and tracking
+      placeholder: "Editor desktop simulator / iPhone 15 + AR Foundation 6 / Android + Vuforia 10.x / Quest 3"
+  - type: textarea
+    id: log
+    attributes:
+      label: Console log
+      description: Lines starting with [HoloTable] are especially useful.
+      render: text
