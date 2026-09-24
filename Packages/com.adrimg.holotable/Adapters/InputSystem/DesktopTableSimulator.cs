@@ -198,7 +198,7 @@ namespace HoloTable.Adapters
             {
                 // Cover the card with a hand / lift the miniature: tracking lost, card still exists.
                 _hover.Hidden = !_hover.Hidden;
-                SetCardVisible(_hover, !_hover.Hidden);
+                SetCardVisible(_hover, !_hover.Hidden && !_hover.Covered);
             }
         }
 
