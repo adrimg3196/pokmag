@@ -3,7 +3,8 @@
     "rootNamespace": "HoloTable.Editor",
     "references": [
         "HoloTable.Runtime",
-        "HoloTable.Domain"
+        "HoloTable.Domain",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor"

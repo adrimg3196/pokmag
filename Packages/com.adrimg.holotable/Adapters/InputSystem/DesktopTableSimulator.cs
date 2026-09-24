@@ -7,6 +7,7 @@ using HoloTable.Games.MTG;
 using HoloTable.Games.Pokemon;
 using HoloTable.Games.Warhammer;
 using HoloTable.Tracking;
+using HoloTable.UI;
 using HoloTable.VFX;
 using TMPro;
 using UnityEngine;
@@ -63,6 +64,7 @@ namespace HoloTable.Adapters
         private float _yaw;
         private PlayerSide _turn = PlayerSide.PlayerOne;
         private bool _warnedNoInput;
+        private bool _warnedMissingDependency;
         private GUIStyle _style;
 
         private void Start()
@@ -79,6 +81,7 @@ namespace HoloTable.Adapters
 
             if (viewCamera == null) viewCamera = Camera.main;
             if (buildTableVisual) BuildTable();
+            TmpFontCheck.WarnIfMissing(this);
         }
 
         private void OnDestroy()
@@ -93,12 +96,27 @@ namespace HoloTable.Adapters
         {
             Keyboard kb = Keyboard.current;
             Mouse mouse = Mouse.current;
-            if (kb == null || mouse == null || viewCamera == null || _director == null)
+            if (kb == null || mouse == null)
             {
-                if (!_warnedNoInput && (kb == null || mouse == null))
+                if (!_warnedNoInput)
                 {
                     _warnedNoInput = true;
                     Debug.LogWarning("[HoloTable] No keyboard/mouse from the Input System (Project Settings ▸ Player ▸ Active Input Handling must include 'Input System Package').", this);
+                }
+
+                return;
+            }
+
+            if (viewCamera == null) viewCamera = Camera.main;
+            if (_director == null) _director = HoloSpawnDirector.Instance;
+            if (viewCamera == null || _director == null)
+            {
+                if (!_warnedMissingDependency)
+                {
+                    _warnedMissingDependency = true;
+                    Debug.LogError(viewCamera == null
+                        ? "[HoloTable] DesktopTableSimulator has no camera: assign 'View Camera' or tag one as MainCamera."
+                        : "[HoloTable] DesktopTableSimulator needs a HoloSpawnDirector in the scene.", this);
                 }
 
                 return;
@@ -195,7 +213,11 @@ namespace HoloTable.Adapters
                 if (_warhammer != null) _warhammer.ResetMovement();
             }
 
-            if (entity != null && _pokemon != null && entity.Definition.System == GameSystem.Pokemon && kb[Key.Space].wasPressedThisFrame)
+            if (kb[Key.Space].wasPressedThisFrame && (entity == null || entity.Definition.System != GameSystem.Pokemon))
+            {
+                DamagePopupService.ShowInfo(TableSpace.Current.Origin + TableSpace.Current.Normal * 0.15f, "Espacio: pon el ratón sobre un Pokémon");
+            }
+            else if (entity != null && _pokemon != null && entity.Definition.System == GameSystem.Pokemon && kb[Key.Space].wasPressedThisFrame)
             {
                 bool shift = kb[Key.LeftShift].isPressed || kb[Key.RightShift].isPressed;
                 _pokemon.DeclareAttackOnNearestRival(entity, shift ? 1 : 0);
@@ -203,7 +225,15 @@ namespace HoloTable.Adapters
 
             if (_warhammer == null) return;
 
-            if (kb[Key.S].wasPressedThisFrame && entity != null && entity.Definition.System == GameSystem.Warhammer)
+            if (kb[Key.S].wasPressedThisFrame && entity != null && entity.Definition.System != GameSystem.Warhammer)
+            {
+                DamagePopupService.ShowInfo(entity.TopWorld, "S es para unidades de Warhammer");
+            }
+            else if (kb[Key.S].wasPressedThisFrame && entity == null)
+            {
+                DamagePopupService.ShowInfo(TableSpace.Current.Origin + TableSpace.Current.Normal * 0.15f, "Pon el ratón sobre una unidad");
+            }
+            else if (kb[Key.S].wasPressedThisFrame)
             {
                 if (_warhammer.Selected != null && _warhammer.Selected.Side.IsRivalOf(entity.Side)) _warhammer.SetTarget(entity);
                 else _warhammer.Select(entity);

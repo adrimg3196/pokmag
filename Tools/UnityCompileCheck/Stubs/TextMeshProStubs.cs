@@ -23,6 +23,13 @@ namespace TMPro
 
     public class TextMeshPro : TMP_Text { }
 
+    public class TMP_FontAsset : ScriptableObject { }
+
+    public static class TMP_Settings
+    {
+        public static TMP_FontAsset defaultFontAsset => null;
+    }
+
     public class TextMeshProUGUI : TMP_Text { }
 }
 

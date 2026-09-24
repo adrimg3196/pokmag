@@ -152,6 +152,7 @@ namespace HoloTable.Tracking
             foreach (KeyValuePair<string, (string Reference, Transform Anchor, Vector2 Size)> f in found)
             {
                 if (f.Value.Anchor != null) ReportFound(f.Key, f.Value.Reference, f.Value.Anchor, f.Value.Size);
+                else Debug.LogWarning($"[HoloTable] Deferred detection of '{f.Value.Reference}' dropped: its anchor was destroyed while the director was disabled.", this);
             }
         }
 

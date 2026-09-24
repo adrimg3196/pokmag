@@ -35,7 +35,11 @@ namespace HoloTable.Editor
         [MenuItem("HoloTable/Create Demo Scene", priority = 0)]
         public static void CreateDemoScene()
         {
-            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                EditorUtility.DisplayDialog("HoloTable", "The demo scene was not created because the current scene was not saved.", "OK");
+                return;
+            }
 
             if (!HasTmpEssentials())
             {
@@ -167,7 +171,8 @@ namespace HoloTable.Editor
             return null;
         }
 
-        private static bool HasTmpEssentials() => AssetDatabase.FindAssets("t:TMP_Settings").Length > 0;
+        private static bool HasTmpEssentials() =>
+            AssetDatabase.FindAssets("t:TMP_Settings").Length > 0 && TMPro.TMP_Settings.defaultFontAsset != null;
 
         private static void SetField(UnityEngine.Object target, string field, object value)
         {

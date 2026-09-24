@@ -179,6 +179,7 @@ namespace HoloTable.UI
 
             EntityHUD hud = go.AddComponent<EntityHUD>();
             hud.canvasGroup = group;
+            TmpFontCheck.WarnIfMissing(hud);
 
             MakeImage("Background", rt, new Color(0.02f, 0.05f, 0.1f, 0.6f), Vector2.zero, Vector2.one);
             hud.nameText = MakeText("Name", rt, 30f, FontStyles.Bold, new Vector2(0.03f, 0.64f), new Vector2(0.97f, 0.98f));

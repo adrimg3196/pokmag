@@ -176,7 +176,7 @@ namespace HoloTable.Games.Warhammer
         /// <summary>Locks the current position as the end of the Movement phase for this unit.</summary>
         public void ConfirmMove()
         {
-            if (Selected == null || !_units.TryGetValue(Selected, out UnitState state)) return;
+            if (!RequireSelection() || !_units.TryGetValue(Selected, out UnitState state)) return;
             state.HasMoved = true;
             movementVisualizer.Hide();
             DamagePopupService.ShowInfo(Selected.TopWorld, "Movimiento confirmado");
@@ -198,13 +198,31 @@ namespace HoloTable.Games.Warhammer
 
         public void Advance()
         {
-            if (Selected == null || _busy || !_units.TryGetValue(Selected, out UnitState state) || state.Mode == MovementMode.Advance) return;
+            if (!RequireSelection() || !_units.TryGetValue(Selected, out UnitState state)) return;
+            if (_busy)
+            {
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Acción en curso…");
+                return;
+            }
+
+            if (state.Mode == MovementMode.Advance)
+            {
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Ya ha avanzado");
+                return;
+            }
+
             StartCoroutine(Guarded(AdvanceRoutine(Selected, state)));
         }
 
         public void CycleWeapon()
         {
-            if (Selected == null || !_units.TryGetValue(Selected, out UnitState state) || state.Sheet.Weapons.Count == 0) return;
+            if (!RequireSelection() || !_units.TryGetValue(Selected, out UnitState state)) return;
+            if (state.Sheet.Weapons.Count == 0)
+            {
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Sin armas en la hoja de datos");
+                return;
+            }
+
             state.WeaponIndex = (state.WeaponIndex + 1) % state.Sheet.Weapons.Count;
             RefreshWeaponLabel(Selected);
             DamagePopupService.ShowInfo(Selected.TopWorld, state.Sheet.Weapons[state.WeaponIndex].Profile.Name);
@@ -528,6 +546,14 @@ namespace HoloTable.Games.Warhammer
             {
                 _busy = false;
             }
+        }
+
+        /// <summary>Commands need a selected unit: say so instead of silently ignoring the key.</summary>
+        private bool RequireSelection()
+        {
+            if (Selected != null) return true;
+            DamagePopupService.ShowInfo(TableSpace.Current.Origin + TableSpace.Current.Normal * 0.15f, "Selecciona primero una unidad");
+            return false;
         }
 
         private static Vector3 SafeTop(LivingEntityController e) =>
