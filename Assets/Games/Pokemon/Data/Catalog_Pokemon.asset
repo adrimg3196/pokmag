@@ -1,0 +1,24 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07ffc4af5ce002880ab666043ef5ccb2, type: 3}
+  m_Name: Catalog_Pokemon
+  m_EditorClassIdentifier: 
+  definitions:
+  - {fileID: 11400000, guid: 83da01a50739081bc7933e152bf46521, type: 2}
+  - {fileID: 11400000, guid: 1559380ebe49ce55efe2357c82f7502c, type: 2}
+  - {fileID: 11400000, guid: b010af499a9305536ec29d5f32d2b77a, type: 2}
+  - {fileID: 11400000, guid: 32d50758a04a728a751e7e9c00fd5ba9, type: 2}
+  - {fileID: 11400000, guid: 0b18f4b8f800444ff3df41f4e7d4117c, type: 2}
+  - {fileID: 11400000, guid: 0e788e507dcf8e22c8c1d0502c8b2265, type: 2}
+  - {fileID: 11400000, guid: b400cd5e12916bdfed0f4fff6e3b4d52, type: 2}
+  - {fileID: 11400000, guid: e1edec5c944ac76c01421d1b8715fb1c, type: 2}
+  includes: []

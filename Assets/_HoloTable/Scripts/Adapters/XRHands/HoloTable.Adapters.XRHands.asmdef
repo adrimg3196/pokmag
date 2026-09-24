@@ -1,0 +1,25 @@
+{
+    "name": "HoloTable.Adapters.XRHands",
+    "rootNamespace": "HoloTable.Adapters",
+    "references": [
+        "HoloTable.Runtime",
+        "Unity.XR.Hands"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "HOLO_XR_HANDS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.xr.hands",
+            "expression": "1.1.0",
+            "define": "HOLO_XR_HANDS"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -1,0 +1,37 @@
+# Unity
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+*.csproj
+*.sln
+*.suo
+*.user
+*.pidb
+*.booproj
+*.unityproj
+*.apk
+*.aab
+*.unitypackage
+crashlytics-build.properties
+.vs/
+.idea/
+.vscode/
+
+# .NET tooling (tests / compile check)
+bin/
+obj/
+TestResults/
+
+# Keep our own tooling projects
+!Tests/**/*.csproj
+!Tools/**/*.csproj
+
+# OS
+.DS_Store
+Thumbs.db

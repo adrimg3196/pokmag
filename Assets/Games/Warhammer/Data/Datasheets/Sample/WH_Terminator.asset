@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55530ad5bdcf76a7cb2e7e5daf0f0950, type: 3}
+  m_Name: WH_Terminator
+  m_EditorClassIdentifier: 
+  displayName: Exterminador
+  referenceImageNames:
+  - wh_terminator
+  cardArt: {fileID: 0}
+  prefab: {fileID: 0}
+  sizeClass: 2
+  footprintOverrideMeters: 0
+  element: 2
+  hologramTint: {r: 0.4, g: 0.7, b: 1, a: 1}
+  moveInches: 5
+  toughness: 5
+  save: 2
+  invulnerableSave: 4
+  wounds: 3
+  objectiveControl: 1
+  baseDiameterMm: 40
+  weapons:
+  - name: Bólter de asalto
+    isMelee: 0
+    rangeInches: 24
+    attacks: 2
+    skill: 3
+    strength: 4
+    armourPenetration: 0
+    damage: 1
+    vfxFlavour: 2
+  - name: Puño de combate
+    isMelee: 1
+    rangeInches: 1
+    attacks: 3
+    skill: 4
+    strength: 8
+    armourPenetration: 2
+    damage: 2
+    vfxFlavour: 7
+  muzzleTransformName: Muzzle
