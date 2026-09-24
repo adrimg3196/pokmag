@@ -1,0 +1,32 @@
+{
+    "name": "HoloTable.Adapters.ARFoundation",
+    "rootNamespace": "HoloTable.Adapters",
+    "references": [
+        "HoloTable.Runtime",
+        "Unity.XR.ARFoundation",
+        "Unity.XR.ARSubsystems",
+        "Unity.XR.CoreUtils"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "HOLO_ARFOUNDATION"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.xr.arfoundation",
+            "expression": "5.0.0",
+            "define": "HOLO_ARFOUNDATION"
+        },
+        {
+            "name": "com.unity.xr.arfoundation",
+            "expression": "6.0.0",
+            "define": "HOLO_ARF6"
+        }
+    ],
+    "noEngineReferences": false
+}

@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 55530ad5bdcf76a7cb2e7e5daf0f0950, type: 3}
+  m_Name: WH_OrkBoy
+  m_EditorClassIdentifier: 
+  displayName: Chico orko
+  referenceImageNames:
+  - wh_orkboy
+  cardArt: {fileID: 0}
+  prefab: {fileID: 0}
+  sizeClass: 1
+  footprintOverrideMeters: 0
+  element: 2
+  hologramTint: {r: 0.5, g: 1, b: 0.3, a: 1}
+  moveInches: 6
+  toughness: 5
+  save: 5
+  invulnerableSave: 0
+  wounds: 1
+  objectiveControl: 2
+  baseDiameterMm: 32
+  weapons:
+  - name: Akribillador
+    isMelee: 0
+    rangeInches: 12
+    attacks: 1
+    skill: 5
+    strength: 4
+    armourPenetration: 0
+    damage: 1
+    vfxFlavour: 2
+  - name: Rebanadora
+    isMelee: 1
+    rangeInches: 1
+    attacks: 3
+    skill: 3
+    strength: 5
+    armourPenetration: 1
+    damage: 1
+    vfxFlavour: 7
+  muzzleTransformName: Muzzle

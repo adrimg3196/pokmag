@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b731477f198d24fe7bb7c0ad22625040, type: 3}
+  m_Name: PKM_Energy_Lightning
+  m_EditorClassIdentifier: 
+  displayName: Energía Rayo
+  referenceImageNames:
+  - pkm_energy_lightning
+  cardArt: {fileID: 0}
+  prefab: {fileID: 0}
+  sizeClass: 0
+  footprintOverrideMeters: 0
+  element: 4
+  hologramTint: {r: 0.4, g: 0.8, b: 1, a: 1}
+  kind: 1
+  stage: 0
+  evolvesFrom: 
+  hp: 10
+  weakness: 0
+  resistance: 0
+  attacks: []
+  providesEnergy: 4

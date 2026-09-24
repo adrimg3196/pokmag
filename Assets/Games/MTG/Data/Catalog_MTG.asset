@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07ffc4af5ce002880ab666043ef5ccb2, type: 3}
+  m_Name: Catalog_MTG
+  m_EditorClassIdentifier: 
+  definitions:
+  - {fileID: 11400000, guid: dabf1ebc835c238da25cea60f655fd37, type: 2}
+  - {fileID: 11400000, guid: 981cd46c9c4563ac95d6fba6363e7b63, type: 2}
+  - {fileID: 11400000, guid: d9114d557bf5d6467e50c81f1a38b73b, type: 2}
+  - {fileID: 11400000, guid: 7d88534aa8a0b4fcf6412fd47cec2bc9, type: 2}
+  - {fileID: 11400000, guid: 88cc9ec2facb07b8a1fb01a017166886, type: 2}
+  - {fileID: 11400000, guid: 2fcab65cb9ba13b8bb8d8139d865afb7, type: 2}
+  includes: []
