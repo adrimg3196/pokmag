@@ -76,6 +76,12 @@ namespace HoloTable.Tracking
         private readonly Dictionary<string, float> _spentMemory = new Dictionary<string, float>();
         private readonly HashSet<EntityDefinition> _warnedDefinitions = new HashSet<EntityDefinition>();
 
+        // Reports received while disabled (pause, calibration, scene transition). SDK events are
+        // edge-triggered, so they are replayed on OnEnable instead of being dropped.
+        private readonly Dictionary<string, (string Reference, Transform Anchor, Vector2 Size)> _deferredFound =
+            new Dictionary<string, (string, Transform, Vector2)>();
+        private readonly HashSet<string> _deferredLost = new HashSet<string>();
+
         public static HoloSpawnDirector Instance { get; private set; }
 
         private static bool _warnedMissing;
@@ -131,6 +137,22 @@ namespace HoloTable.Tracking
             }
         }
 
+        private void OnEnable()
+        {
+            if (_deferredFound.Count == 0 && _deferredLost.Count == 0) return;
+
+            var lost = new List<string>(_deferredLost);
+            var found = new List<KeyValuePair<string, (string Reference, Transform Anchor, Vector2 Size)>>(_deferredFound);
+            _deferredLost.Clear();
+            _deferredFound.Clear();
+
+            foreach (string id in lost) ReportLost(id);
+            foreach (KeyValuePair<string, (string Reference, Transform Anchor, Vector2 Size)> f in found)
+            {
+                if (f.Value.Anchor != null) ReportFound(f.Key, f.Value.Reference, f.Value.Anchor, f.Value.Size);
+            }
+        }
+
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -160,7 +182,13 @@ namespace HoloTable.Tracking
         /// <summary>Card / miniature seen (or seen again). Safe to call every frame.</summary>
         public void ReportFound(string instanceId, string referenceName, Transform anchor, Vector2 physicalSize)
         {
-            if (string.IsNullOrEmpty(instanceId) || !isActiveAndEnabled) return;
+            if (string.IsNullOrEmpty(instanceId)) return;
+            if (!isActiveAndEnabled)
+            {
+                _deferredLost.Remove(instanceId);
+                _deferredFound[instanceId] = (referenceName, anchor, physicalSize);
+                return;
+            }
 
             if (_entries.TryGetValue(instanceId, out TargetEntry entry))
             {
@@ -206,9 +234,16 @@ namespace HoloTable.Tracking
         /// <summary>Card no longer visible. The hologram leaves its card after the grace period.</summary>
         public void ReportLost(string instanceId)
         {
-            // During scene teardown adapters may report after the director was disabled.
-            if (!isActiveAndEnabled) return;
-            if (string.IsNullOrEmpty(instanceId) || !_entries.TryGetValue(instanceId, out TargetEntry entry)) return;
+            if (string.IsNullOrEmpty(instanceId)) return;
+            if (!isActiveAndEnabled)
+            {
+                // Can't start coroutines now (also covers scene teardown): replay on OnEnable.
+                _deferredFound.Remove(instanceId);
+                if (_entries.ContainsKey(instanceId)) _deferredLost.Add(instanceId);
+                return;
+            }
+
+            if (!_entries.TryGetValue(instanceId, out TargetEntry entry)) return;
             if (entry.Target.Status == TrackingStatus.Lost) return;
 
             entry.Target.MarkLost();
@@ -440,7 +475,6 @@ namespace HoloTable.Tracking
             }
 
             if (best < 0) return false;
-            if (bestDistance == float.MaxValue) bestDistance = 0f;
 
             LivingEntityController entity = _orphans[best].Entity;
             _orphans.RemoveAt(best);
