@@ -1,110 +1,104 @@
-# pokmag · HoloTable XR
+# HoloTable XR
 
-Plataforma de mesa holográfica en **Unity** (AR Foundation · Vuforia · Meta Quest 3) donde cartas de
-**Pokémon TCG**, **Magic: The Gathering** y miniaturas de **Warhammer 40K** cobran vida como hologramas 3D
-al ponerlas sobre la mesa, al estilo de los duelos de Yu-Gi-Oh.
+*English · [Español](README.es.md)*
 
-- **Reglas reales, testeadas.** Evolución, debilidad/resistencia, coste de energía, *first strike*, *trample*,
-  *deathtouch*, *lifelink* de ambos lados, tabla F vs R, salvaciones con FP/cobertura (solo a distancia)/invulnerable…
-  viven en un dominio C# puro con **132 tests xUnit** (incluye casos límite verificados contra las reglas oficiales).
-- **Independiente del SDK.** Un director central recibe «carta vista / carta perdida» de cualquier tracker
-  (Vuforia, AR Foundation, QR en Quest, visión por computador propia) y sincroniza Spawn/Die sin parpadeos.
-- **Datos, no código.** Una carta nueva es un `ScriptableObject` y una imagen de referencia.
+[![CI](https://github.com/adrimg3196/pokmag/actions/workflows/ci.yml/badge.svg)](https://github.com/adrimg3196/pokmag/actions/workflows/ci.yml)
+![Unity 2021.3.18+](https://img.shields.io/badge/Unity-2021.3.18%2B-black)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
-## Los 5 sistemas pedidos
+**Put a physical card on the table and watch it come alive.** HoloTable XR is a Unity package that turns
+**Pokémon TCG** cards, **Magic: The Gathering** cards and **Warhammer 40K** miniatures into animated 3D holograms
+in mixed reality, Yu-Gi-Oh duel-disk style: creatures roar into existence, stare at their rivals, evolve when you
+stack the evolution card, fly over the board, cast room-darkening spells and roll physical AR dice.
 
-| Pedido | Archivo | Qué hace |
-|---|---|---|
-| `LIVING_ENTITY_CONTROLLER.CS` | [`Runtime/Entities/LivingEntityController.cs`](Assets/_HoloTable/Scripts/Runtime/Entities/LivingEntityController.cs) | Máquina de estados Spawn→Idle→Attack/TakeDamage→Die con Animator (triggers o cross-fade) **y fallbacks procedurales** si el modelo no tiene clips · LookAt de cabeza + giro de cuerpo hacia el rival más cercano o hacia el jugador (IK humanoide o hueso genérico con límites) · escala dinámica (pequeños caben en su carta, dragones sobresalen) · seguimiento suavizado del anchor · altura de vuelo · disolución por shader · HUD 3D |
-| `GAME_LOGIC_POKEMON.CS` | [`Runtime/Games/Pokemon/GameLogicPokemon.cs`](Assets/_HoloTable/Scripts/Runtime/Games/Pokemon/GameLogicPokemon.cs) | Evolución AR al **apilar** la carta encima **o sustituirla** en el mismo sitio (siluetas blancas alternándose cada vez más rápido + capullo de partículas), conserva daño y energías · auras elementales · energías físicas que se «enganchan» al Pokémon cercano · ataques con coste, debilidad ×2, resistencia −30 y pop-ups «¡Es súper eficaz!» |
-| `GAME_LOGIC_MTG.CS` | [`Runtime/Games/MTG/GameLogicMTG.cs`](Assets/_HoloTable/Scripts/Runtime/Games/MTG/GameLogicMTG.cs) + [`MtgSpellCaster.cs`](Assets/_HoloTable/Scripts/Runtime/Games/MTG/MtgSpellCaster.cs) | *Tapping* por rotación física de 90° (con histéresis y tolerancia a cartas del revés) → «ATACANTE» / «HABILIDAD ACTIVADA» · **bloqueo físico**: el defensor desliza su criatura junto al atacante · voladores («Flying»/«Vuela») a 30 cm con sombra de contacto realista · hechizos que oscurecen la habitación real y lanzan rayos desde el techo · vidas y mareo de invocación |
-| `GAME_LOGIC_WARHAMMER.CS` | [`Runtime/Games/Warhammer/GameLogicWarhammer.cs`](Assets/_HoloTable/Scripts/Runtime/Games/Warhammer/GameLogicWarhammer.cs) | Selección por mirada · anillo + cilindro holográfico con el Movimiento exacto en pulgadas **medido desde la posición inicial** (se pone rojo si mueves la miniatura de más) · Avance con D6 · láser rojo de LoS con 9 rayos contra terreno virtual **y la malla real de la habitación** (Visible / Cobertura / Bloqueada) · secuencia Impactar→Herir→Salvar con **dados físicos lanzados con la mano** |
-| `AR_COMBAT_MANAGER.CS` | [`Runtime/Combat/ARCombatManager.cs`](Assets/_HoloTable/Scripts/Runtime/Combat/ARCombatManager.cs) | Distancias físicas entre targets en el plano de la mesa · eventos de enfrentamiento · corrutinas: animación de ataque → frame de impacto → proyectil de partículas con pool que **persigue la posición actual** del defensor (o golpe cuerpo a cuerpo) → impacto → HP y reacción de daño |
+> Unofficial fan project, not affiliated with Nintendo/The Pokémon Company, Wizards of the Coast or Games Workshop.
+> No official art or card scans are included. See [TRADEMARKS.md](TRADEMARKS.md).
 
-Entregables de documentación:
+## Try it in 2 minutes — no AR device, no 3D models needed
 
-- [`Docs/SETUP_TRACKING.md`](Docs/SETUP_TRACKING.md) — OnTargetFound/OnTargetLost en **Vuforia**, **AR Foundation** y **Quest 3**, línea temporal Spawn/Die, Animator Controller y shader.
-- [`Docs/FOLDER_STRUCTURE.md`](Docs/FOLDER_STRUCTURE.md) — estructura de carpetas y convenciones para Pokémon / MTG / Warhammer.
+1. Unity 2021.3.18+ (2022.3 LTS or Unity 6 recommended), any 3D/URP project.
+2. **Window ▸ Package Manager ▸ + ▸ Add package from git URL…**
+   ```
+   https://github.com/adrimg3196/pokmag.git?path=/Packages/com.adrimg.holotable
+   ```
+3. Menu **HoloTable ▸ Create Demo Scene** → imports the demo cards and TextMeshPro essentials and builds a wired scene.
+4. Press **Play**. The desktop simulator lets you place virtual cards with the mouse and play all three games.
+   Cards without a 3D model spawn a procedural placeholder hologram.
 
-## Desarrollado con ECC (everything-claude-code)
-
-El proyecto aplica y trae integrado [ECC](https://github.com/affaan-m/ecc) en `.claude/`:
-
-| Pieza de ECC | Cómo se usa aquí |
+| Desktop controls | |
 |---|---|
-| `hexagonal-architecture` | Dominio puro ↔ puertos (`IGameRuleModule`, `IRandomSource`, `ReportFound/Lost`) ↔ adaptadores por SDK |
-| `tdd-workflow` + `csharp-testing` | Cada bug de reglas encontrado se reprodujo primero con un test en rojo (MTG *reminder text*, cobertura en melee, 0 daño con debilidad, *lifelink* del bloqueador) |
-| Agentes `csharp-reviewer`, `silent-failure-hunter`, `performance-optimizer`, `pr-test-analyzer` | Revisión adversarial en paralelo; ~50 hallazgos verificados y corregidos (bloqueos de `_busy`, hechizos colgados, VFX sin pool, GC por frame, fugas de materiales, fallos silenciosos de configuración) |
-| *santa-loop* (doble revisión hasta converger) | Tras corregir, una segunda ronda de revisión independiente valida el diff |
-| `verification-loop` + hooks de `rules/csharp` | Hook `PostToolUse` (`.claude/hooks/verify-csharp.sh`): tras editar un `.cs` compila todos los scripts y, si es dominio, pasa los tests |
-| Skill propia `holotable-unity` | Recetas para añadir cartas, reglas, juegos nuevos o adaptadores de SDK sin romper nada |
+| `1`–`9`, `Tab` | pick a card from the catalog |
+| Left-click / drag | place / move a card (drop it on another to cover it → Pokémon evolution) |
+| Right-click | tap / untap (MTG attack) |
+| `H` / `X` | hide or lift a card / remove it |
+| `Space` / `Shift+Space` | Pokémon attack 1 / 2 on the nearest rival |
+| `S`, `F`, `V`, `C`, `Q`, `Esc` | Warhammer select-target, shoot, advance, confirm move, weapon, deselect |
+| `N` | next turn · middle-drag orbit · wheel zoom |
 
-Licencia MIT de ECC en [`.claude/THIRD_PARTY_NOTICES.md`](.claude/THIRD_PARTY_NOTICES.md).
+More in [Docs/DESKTOP_SIMULATOR.md](Docs/DESKTOP_SIMULATOR.md).
 
-## Arquitectura (puertos y adaptadores)
+## Features
+
+| System | What it does |
+|---|---|
+| **LivingEntityController** | Spawn → Idle → Attack / TakeDamage → Die state machine (Animator triggers or cross-fades, with procedural fallbacks when a model has no clips) · head and body look-at toward the player or the nearest rival · dynamic scale (small creatures fit their card, dragons tower over the board) · smoothed anchor following · hover · shader dissolve · world-space HUD |
+| **HoloSpawnDirector** | SDK-agnostic bridge: debounced *found/lost*, per-game ghost persistence and re-attach (a lifted miniature keeps its wounds), spent-card memory, queued reports while disabled, clear warnings for any missing setup |
+| **Pokémon** | Evolution by stacking or swapping the physical card (flickering white silhouettes + particle cocoon, damage and energies carried over) · energy cards attach to the nearby Pokémon · elemental auras · weakness ×2 / resistance −30 · energy cost check · floating damage numbers |
+| **Magic: The Gathering** | Tap detection from the card's 90° rotation (hysteresis, upside-down tolerant) · physical blocking by sliding a creature next to the attacker · flying/reach, first strike, trample, deathtouch, lifelink · fliers hover 30 cm with a contact shadow · instants/sorceries darken the real room and strike with lightning · life totals |
+| **Warhammer 40K** | Holographic movement ring in inches measured from the start position (turns red if exceeded) · advance · red line-of-sight laser tested against virtual terrain **and the real room mesh** (clear / cover / blocked) · hit → wound → save sequence with physical, hand-thrown AR dice (10th edition rules) |
+| **ARCombatManager** | Engagement detection from physical distances · attack choreography: animation → impact frame → pooled homing projectile → hit reaction · always resolves (timeouts, exactly-once callbacks) |
+| **Adapters** | AR Foundation 5/6, Vuforia 10+, UnityEvents bridge (Quest QR / custom CV), XR Hands dice throwing, Input System swipe dice and desktop simulator |
+
+**Rules are real and tested:** a pure C# domain with **132 xUnit tests**, including edge cases checked against the
+official rules (MTG comprehensive rules, 40K 10th ed. core rules, Pokémon TCG rulebook).
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph SDK["Adaptadores de tracking"]
-        V[VuforiaTargetAdapter]
-        A[ARFoundationTrackingAdapter]
-        B[TargetEventBridge<br/>UnityEvents / QR / CV propia]
+    subgraph Adapters
+        V[Vuforia] --- A[AR Foundation] --- B[TargetEventBridge] --- S[Desktop simulator]
     end
-    subgraph Runtime["HoloTable.Runtime (Unity)"]
-        D[HoloSpawnDirector]
-        L[LivingEntityController]
-        C[ARCombatManager]
-        P[GameLogicPokemon]
-        M[GameLogicMTG]
-        W[GameLogicWarhammer]
-        H[EntityHUD · Popups · VFX]
+    subgraph Runtime
+        D[HoloSpawnDirector] --> M[Game modules<br/>Pokémon · MTG · 40K]
+        D --> L[LivingEntityController]
+        M -->|AttackRequest| C[ARCombatManager] --> L
     end
-    subgraph Domain["HoloTable.Domain (C# puro, testeado)"]
-        R1[EvolutionRules · EnergyRules · PokemonDamageCalculator]
-        R2[TapRules · MtgCombatRules · MtgKeywordParser]
-        R3[WoundRules · AttackResolver · MovementRules · CoverRules]
-        R4[ScaleRules · EngagementRules · LookTargetSelector · Vitals]
+    subgraph Domain["Domain (pure C#, tested)"]
+        R[Rules]
     end
-    V & A & B -->|ReportFound / ReportLost| D
-    D -->|IGameRuleModule| P & M & W
-    D --> L
-    P & M & W -->|AttackRequest| C
-    C --> L
-    L --> H
-    P --> R1
-    M --> R2
-    W --> R3
-    L & C --> R4
+    Adapters -->|ReportFound / ReportLost| D
+    M --> R
 ```
 
-- **Domain** no referencia `UnityEngine` (`noEngineReferences: true`): se compila y testea con `dotnet test`.
-- Cada **adaptador** tiene su propio asmdef con *Version Defines*: solo compila si el paquete (ARF, Vuforia, XR Hands, Input System) está instalado. Un proyecto solo-Vuforia no necesita AR Foundation y viceversa.
-- Los **módulos de juego** implementan `IGameRuleModule` y pueden interceptar una carta antes de que se convierta en criatura (evolución, energía, hechizo). Añadir Yu-Gi-Oh o Lorcana = otro módulo.
+- **Domain** has no `UnityEngine` reference and is tested with `dotnet test`.
+- **Adapters** each live in their own assembly and only compile when their SDK package is installed.
+- **Games** implement `IGameRuleModule`; adding Lorcana or Yu-Gi-Oh is another module.
 
-## Puesta en marcha
+## Going to real AR
 
-Requisitos: Unity 2021.3.18+ (recomendado 2022.3 LTS o Unity 6) · URP · TextMeshPro · uno de: AR Foundation 5/6, Vuforia 10+ · opcional XR Hands, Input System.
+Follow [Docs/SETUP_TRACKING.md](Docs/SETUP_TRACKING.md) (Vuforia, AR Foundation, Meta Quest 3) and
+[Docs/FOLDER_STRUCTURE.md](Docs/FOLDER_STRUCTURE.md). Create cards with *Create ▸ HoloTable ▸ …*, set
+*Reference Image Names* to the names in your image library, optionally assign a `HOLO_*` prefab, and add them to a
+`CardCatalog`.
 
-1. Copia `Assets/_HoloTable` a tu proyecto (Unity generará los `.meta`).
-2. Escena: `XR Origin` (o `ARCamera` de Vuforia) y un GameObject **HoloTable** con:
-   `TableSpace`, `HoloSpawnDirector` (asigna `CardCatalog` y `EntityHUD`), `ARCombatManager`, `DamagePopupService`,
-   `GameLogicPokemon`, `GameLogicMTG`, `GameLogicWarhammer` y, para Warhammer, un `DiceTray`.
-3. Tracking: sigue [`Docs/SETUP_TRACKING.md`](Docs/SETUP_TRACKING.md) (un componente adaptador y listo).
-4. Datos: *Create → HoloTable → Pokemon/Card, MTG/Card, Warhammer/Datasheet*. Rellena `Reference Image Names`
-   con el nombre de la imagen en tu librería y asigna el prefab `HOLO_*` (raíz con `LivingEntityController`, hijo con el modelo).
-5. Agrupa las definiciones en un `CardCatalog` (*Create → HoloTable → Card Catalog*).
-
-Comandos útiles (todos públicos y sin parámetros para botones XR / UnityEvents):
-`GameLogicWarhammer.Shoot / Advance / ConfirmMove / CycleWeapon / Deselect / ResetMovement`,
-`GameLogicMTG.BeginTurn(side)`, `GameLogicPokemon.DeclareAttackOnNearestRival(attacker, index)`.
-
-## Verificación sin Unity
+## Develop without Unity
 
 ```bash
-dotnet test  Tests/HoloTable.Domain.Tests     # 132 tests de reglas (C# 9, como Unity)
-dotnet build Tools/UnityCompileCheck          # compila TODOS los scripts contra UnityEngine 2021.3 (NuGet)
+dotnet test  Tests/HoloTable.Domain.Tests      # rules
+dotnet build Tools/UnityCompileCheck           # all runtime + editor scripts vs UnityEngine/UnityEditor reference DLLs
+python3 Tools/generate_meta.py --check         # every package file has a .meta (required for git installs)
 ```
 
-`UnityCompileCheck` usa las DLL de referencia públicas de UnityEngine y *stubs* mínimos de TextMeshPro, uGUI, AR Foundation,
-Vuforia, XR Hands e Input System: detecta errores de C# en nuestro código, no cambios de API de esos SDK.
-La validación definitiva sigue siendo abrir el proyecto en Unity. Ambos pasos corren en CI (`.github/workflows/ci.yml`).
+The compile check uses minimal stubs for AR Foundation, Vuforia, XR Hands, Input System and TextMeshPro; the final
+gate is always Unity itself.
+
+## Contributing
+
+PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) and
+[SECURITY.md](SECURITY.md). The repo ships an [ECC](https://github.com/affaan-m/ecc) setup in `.claude/`
+(reviewer agents, C# rules, TDD and verification skills, a compile-check hook) for AI-assisted contributions.
+
+## License
+
+Code: [MIT](LICENSE). Game names belong to their owners — see [TRADEMARKS.md](TRADEMARKS.md).

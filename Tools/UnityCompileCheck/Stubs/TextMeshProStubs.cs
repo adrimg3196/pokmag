@@ -15,6 +15,10 @@ namespace TMPro
         public FontStyles fontStyle { get; set; }
         public float outlineWidth { get; set; }
         public TextAlignmentOptions alignment { get; set; }
+        public bool enableAutoSizing { get; set; }
+        public float fontSizeMin { get; set; }
+        public float fontSizeMax { get; set; }
+        public RectTransform rectTransform => null;
     }
 
     public class TextMeshPro : TMP_Text { }
@@ -26,8 +30,12 @@ namespace UnityEngine.UI
 {
     public class Image : MonoBehaviour
     {
+        public enum Type { Simple, Sliced, Tiled, Filled }
+
         public Sprite sprite { get; set; }
         public Color color { get; set; }
         public float fillAmount { get; set; }
+        public Type type { get; set; }
+        public RectTransform rectTransform => null;
     }
 }

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    CI-only sanity check: compiles every HoloTable runtime script against the public
+    CI-only sanity check: compiles every HoloTable runtime and editor script against the public
     UnityEngine reference assemblies (NuGet) without a Unity install or licence.
     Third-party SDKs (AR Foundation, Vuforia, XR Hands, Input System, TextMeshPro) are
     replaced by minimal API stubs in ./Stubs, so this catches C# errors in our code,
@@ -19,12 +19,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="../../Assets/_HoloTable/Scripts/**/*.cs" Link="Src/%(RecursiveDir)%(Filename)%(Extension)" />
+    <Reference Include="UnityEditor">
+      <HintPath>$(PkgUnity3D_SDK)/lib/UnityEditor.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Packages/com.adrimg.holotable/**/*.cs" Exclude="../../Packages/com.adrimg.holotable/Samples~/**" Link="Src/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="Stubs/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="UnityEngine.Modules" Version="2021.3.33" PrivateAssets="all" />
+    <!-- Only UnityEditor.dll is used (Editor/ scripts); its bundled UnityEngine.dll is excluded. -->
+    <PackageReference Include="Unity3D.SDK" Version="2021.1.14.1" PrivateAssets="all" ExcludeAssets="all" GeneratePathProperty="true" />
   </ItemGroup>
 
 </Project>

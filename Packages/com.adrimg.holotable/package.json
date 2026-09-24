@@ -1,0 +1,51 @@
+{
+  "name": "com.adrimg.holotable",
+  "version": "0.2.0",
+  "displayName": "HoloTable XR",
+  "description": "Mixed-reality tabletop framework: physical Pokémon TCG cards, Magic: The Gathering cards and Warhammer 40K miniatures come alive as animated 3D holograms (Yu-Gi-Oh style). Tested rules engine, SDK-agnostic tracking (AR Foundation, Vuforia, custom), combat choreography, AR dice, and a desktop simulator to play without AR hardware.",
+  "unity": "2021.3",
+  "unityRelease": "18f1",
+  "documentationUrl": "https://github.com/adrimg3196/pokmag#readme",
+  "changelogUrl": "https://github.com/adrimg3196/pokmag/blob/main/Packages/com.adrimg.holotable/CHANGELOG.md",
+  "licensesUrl": "https://github.com/adrimg3196/pokmag/blob/main/LICENSE",
+  "license": "MIT",
+  "keywords": [
+    "ar",
+    "xr",
+    "mixed-reality",
+    "tabletop",
+    "trading-card-game",
+    "pokemon",
+    "mtg",
+    "warhammer",
+    "hologram",
+    "ar-foundation",
+    "vuforia"
+  ],
+  "author": {
+    "name": "adrimg3196",
+    "url": "https://github.com/adrimg3196"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adrimg3196/pokmag.git"
+  },
+  "dependencies": {
+    "com.unity.ugui": "1.0.0",
+    "com.unity.textmeshpro": "3.0.6",
+    "com.unity.inputsystem": "1.7.0",
+    "com.unity.modules.animation": "1.0.0",
+    "com.unity.modules.audio": "1.0.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.particlesystem": "1.0.0",
+    "com.unity.modules.physics": "1.0.0",
+    "com.unity.modules.ui": "1.0.0"
+  },
+  "samples": [
+    {
+      "displayName": "Demo Cards",
+      "description": "Sample card data for all three games (Charmander→Charizard, Pikachu, energies, Shivan Dragon, Serra Angel, Lightning Bolt, Intercessor, Ork Boy, Terminator…) and a master catalog. Used by HoloTable ▸ Create Demo Scene.",
+      "path": "Samples~/DemoCards"
+    }
+  ]
+}

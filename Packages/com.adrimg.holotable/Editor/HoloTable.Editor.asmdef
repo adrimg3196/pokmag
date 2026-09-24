@@ -1,0 +1,19 @@
+{
+    "name": "HoloTable.Editor",
+    "rootNamespace": "HoloTable.Editor",
+    "references": [
+        "HoloTable.Runtime",
+        "HoloTable.Domain"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

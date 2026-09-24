@@ -14,8 +14,14 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Every package file has a committed .meta (required for git-URL installs)
+        run: python3 Tools/generate_meta.py --check
+
+      - name: package.json is valid
+        run: python3 -c "import json; json.load(open('Packages/com.adrimg.holotable/package.json'))"
+
       - name: Domain rules unit tests (xUnit, C# 9 like Unity)
         run: dotnet test Tests/HoloTable.Domain.Tests --nologo
 
-      - name: Compile all Unity scripts against UnityEngine reference assemblies
+      - name: Compile all runtime + editor scripts against UnityEngine/UnityEditor reference assemblies
         run: dotnet build Tools/UnityCompileCheck --nologo

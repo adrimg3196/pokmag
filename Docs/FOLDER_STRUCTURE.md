@@ -1,42 +1,23 @@
 # Estructura de carpetas en Unity
 
-Objetivo: que el **código** sea único y compartido, y que el **contenido** de cada juego (cartas, modelos,
+Objetivo: que el **código** sea único y compartido (el paquete `com.adrimg.holotable`), y que el **contenido** de cada juego (cartas, modelos,
 animaciones, VFX, audio) viva aislado, se pueda cargar bajo demanda y se pueda licenciar/eliminar por separado
 (las IP de Pokémon, Wizards y Games Workshop tienen condiciones distintas).
 
 ```
-Assets/
-├── _HoloTable/                         ← motor compartido (el "_" lo mantiene arriba)
-│   ├── Scripts/
-│   │   ├── Domain/                     ← reglas puras C# (sin UnityEngine) · HoloTable.Domain.asmdef
-│   │   │   ├── Common/  Combat/  Pokemon/  Mtg/  Warhammer/
-│   │   ├── Runtime/                    ← MonoBehaviours · HoloTable.Runtime.asmdef
-│   │   │   ├── Core/        TableSpace, EntityRegistry, HoloMath
-│   │   │   ├── Data/        EntityDefinition, CardCatalog, *Definition / Datasheet
-│   │   │   ├── Entities/    LivingEntityController, AnimationEventRelay
-│   │   │   ├── Tracking/    HoloSpawnDirector, IGameRuleModule, TargetEventBridge
-│   │   │   ├── Combat/      ARCombatManager, HoloProjectile, AttackRequest
-│   │   │   ├── UI/          EntityHUD, DamagePopupService, FloatingDamageNumber
-│   │   │   ├── VFX/         HologramMaterialDriver, EnvironmentDimmer, ContactShadow, LightningBoltEffect
-│   │   │   └── Games/
-│   │   │       ├── Pokemon/     GameLogicPokemon
-│   │   │       ├── MTG/         GameLogicMTG, MtgSpellCaster
-│   │   │       └── Warhammer/   GameLogicWarhammer, MovementRangeVisualizer, LineOfSightLaser, DiceTray, ARDie
-│   │   └── Adapters/                   ← un asmdef por SDK, solo compila si el paquete está instalado
-│   │       ├── ARFoundation/  Vuforia/  XRHands/  InputSystem/
-│   ├── Shaders/                        SG_Hologram.shadergraph, SG_ContactShadow…
-│   ├── VFX/Shared/                     Portal de invocación, disolución, impactos, proyectiles genéricos
-│   ├── Prefabs/Core/                   HoloTableRig, EntityHUD, DamageNumber, DiceTray, D6
-│   ├── Animation/                      AC_HoloCreature_Base.controller (controller base compartido)
-│   ├── Audio/Shared/
-│   ├── Settings/                       URP, XR Plug-in, Vuforia/ARF configs, Input Actions
-│   └── Scenes/                         Bootstrap, HoloTable_Main, Sandbox_Pokemon, Sandbox_MTG, Sandbox_WH
-│
+Packages/com.adrimg.holotable/          ← el paquete que instala la comunidad (código compartido)
+├── Domain/        reglas puras C# (sin UnityEngine) · HoloTable.Domain.asmdef
+├── Runtime/       Core · Data · Entities · Tracking · Combat · UI · VFX · Games/{Pokemon,MTG,Warhammer}
+├── Adapters/      ARFoundation · Vuforia · XRHands · InputSystem (un asmdef por SDK)
+├── Editor/        asistente HoloTable ▸ Create Demo Scene
+└── Samples~/DemoCards/                 datos de ejemplo importables desde Package Manager
+
+Assets/                                 ← TU proyecto: contenido de cada juego, aislado
+├── HoloTableDemo/                      escena generada por el asistente
 ├── Games/
 │   ├── Pokemon/
-│   │   ├── Data/
-│   │   │   ├── Catalog_Pokemon.asset
-│   │   │   └── Cards/<Set>/                PKM_<Set>_<Nº>_<Nombre>.asset   (p. ej. PKM_SV03_125_Charizard)
+│   │   ├── Data/Catalog_Pokemon.asset
+│   │   ├── Data/Cards/<Set>/                PKM_<Set>_<Nº>_<Nombre>.asset   (p. ej. PKM_SV03_125_Charizard)
 │   │   ├── ReferenceImages/<Set>/          escaneos + RIL_Pokemon.asset (AR Foundation) / DB Vuforia
 │   │   ├── Models/<Especie>/               FBX, texturas, materiales
 │   │   ├── Animations/<Especie>/           clips + AOC_<Especie>.overrideController
@@ -44,33 +25,17 @@ Assets/
 │   │   ├── VFX/Elements/<Tipo>/            Aura, AttachBurst, Projectile (Fire, Water, Lightning…)
 │   │   ├── VFX/Evolution/                  Cocoon, Burst
 │   │   └── Audio/Cries/
-│   │
 │   ├── MTG/
-│   │   ├── Data/
-│   │   │   ├── Catalog_MTG.asset
-│   │   │   └── Cards/<SetCode>/            MTG_<SetCode>_<Nº>_<Nombre>.asset
-│   │   ├── ReferenceImages/<SetCode>/
-│   │   ├── Models/Creatures/<Tipo>/  Models/Tokens/
-│   │   ├── Animations/<Criatura>/
-│   │   ├── Prefabs/Holograms/Creatures/  Prefabs/Holograms/Tokens/
-│   │   ├── VFX/Spells/<Arquetipo>/         Lightning, Darkness, Fire, Heal, Buff
-│   │   ├── VFX/Abilities/
-│   │   └── Audio/
-│   │
+│   │   ├── Data/Catalog_MTG.asset · Data/Cards/<SetCode>/MTG_<SetCode>_<Nº>_<Nombre>.asset
+│   │   ├── ReferenceImages/<SetCode>/ · Models/Creatures/ · Models/Tokens/ · Animations/
+│   │   ├── Prefabs/Holograms/{Creatures,Tokens}/ · VFX/Spells/<Arquetipo>/ · VFX/Abilities/ · Audio/
 │   └── Warhammer/
-│       ├── Data/
-│       │   ├── Catalog_Warhammer.asset
-│       │   └── Datasheets/<Facción>/       WH_<Facción>_<Unidad>.asset
-│       ├── ModelTargets/<Facción>/         Vuforia Model Targets de las miniaturas / marcadores de peana
-│       ├── Models/<Facción>/<Unidad>/
-│       ├── Animations/<Facción>/
-│       ├── Prefabs/Holograms/<Facción>/
-│       ├── Prefabs/Terrain/                Ruinas / bosques virtuales (capa VirtualTerrain → LoS)
-│       ├── VFX/Weapons/                    Bolter, Plasma, Flamer, Melee
-│       ├── Dice/                           D6 físico, materiales por facción
-│       └── Audio/
-│
-└── ThirdParty/                         ← SDKs y packs de la Asset Store, nunca mezclados con lo propio
+│       ├── Data/Catalog_Warhammer.asset · Data/Datasheets/<Facción>/WH_<Facción>_<Unidad>.asset
+│       ├── ModelTargets/<Facción>/ · Models/<Facción>/<Unidad>/ · Animations/<Facción>/
+│       ├── Prefabs/Holograms/<Facción>/ · Prefabs/Terrain/ (capa VirtualTerrain → LoS)
+│       └── VFX/Weapons/ · Dice/ · Audio/
+├── Shared/                             shaders (SG_Hologram), VFX comunes, AC_HoloCreature_Base.controller
+└── ThirdParty/                         SDKs y packs de la Asset Store, nunca mezclados con lo propio
 ```
 
 ## Convenciones

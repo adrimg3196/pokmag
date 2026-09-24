@@ -6,10 +6,10 @@ archivos pequeños y cohesionados.
 
 ## Capas y reglas de dependencia
 
-- `Assets/_HoloTable/Scripts/Domain` — reglas puras. **Prohibido** `using UnityEngine`. Tipos inmutables (`record`, `with`).
+- `Packages/com.adrimg.holotable/Domain` — reglas puras. **Prohibido** `using UnityEngine`. Tipos inmutables (`record`, `with`).
   Vectores con `System.Numerics`. Toda regla nueva va con test en `Tests/HoloTable.Domain.Tests`.
-- `Assets/_HoloTable/Scripts/Runtime` — MonoBehaviours. Depende de Domain, nunca de un SDK de tracking.
-- `Assets/_HoloTable/Scripts/Adapters/<SDK>` — un asmdef por SDK con `versionDefines` + `defineConstraints`.
+- `Packages/com.adrimg.holotable/Runtime` — MonoBehaviours. Depende de Domain, nunca de un SDK de tracking.
+- `Packages/com.adrimg.holotable/Adapters/<SDK>` — un asmdef por SDK con `versionDefines` + `defineConstraints`.
 - Los juegos se integran implementando `IGameRuleModule` y registrándose en `HoloSpawnDirector`.
   Los módulos calculan reglas; `ARCombatManager` solo coreografía (`AttackRequest`).
 
@@ -33,5 +33,6 @@ dotnet test  Tests/HoloTable.Domain.Tests
 dotnet build Tools/UnityCompileCheck
 ```
 
-Ambos deben terminar sin errores ni warnings (`TreatWarningsAsErrors`). Si usas una API nueva de un SDK
+Ambos deben terminar sin errores ni warnings (`TreatWarningsAsErrors`). Tras crear ficheros en el paquete:
+`python3 Tools/generate_meta.py` (los paquetes instalados por git necesitan todos sus `.meta`). Si usas una API nueva de un SDK
 externo, añádela a `Tools/UnityCompileCheck/Stubs` con la firma real.
