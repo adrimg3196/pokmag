@@ -22,6 +22,9 @@ namespace HoloTable.Games.Warhammer
         [SerializeField] private TMP_Text label;
 
         private MeshFilter _filter;
+        private Material _ownedMaterial;
+        private Vector3[] _vertices;
+        private Color[] _colors;
         private MeshRenderer _renderer;
         private Mesh _mesh;
         private float _radius;
@@ -38,11 +41,13 @@ namespace HoloTable.Games.Warhammer
         {
             _filter = gameObject.AddComponent<MeshFilter>();
             _renderer = gameObject.AddComponent<MeshRenderer>();
-            _renderer.sharedMaterial = material != null ? material : HoloMaterials.CreateUnlitTransparent(Color.white, 3001);
+            if (material == null) _ownedMaterial = HoloMaterials.CreateUnlitTransparent(Color.white, 3001);
+            _renderer.sharedMaterial = material != null ? material : _ownedMaterial;
             _renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _mesh = new Mesh { name = "MovementRange" };
             _mesh.MarkDynamic();
             _filter.sharedMesh = _mesh;
+            AllocateMesh();
             _renderer.enabled = false;
             if (label != null) label.gameObject.SetActive(false);
         }
@@ -50,6 +55,7 @@ namespace HoloTable.Games.Warhammer
         private void OnDestroy()
         {
             if (_mesh != null) Destroy(_mesh);
+            if (_ownedMaterial != null) Destroy(_ownedMaterial);
         }
 
         /// <summary>Shows the template centred on <paramref name="follow"/> (the miniature's base).</summary>
@@ -111,39 +117,13 @@ namespace HoloTable.Games.Warhammer
             }
         }
 
-        private void Rebuild()
+        /// <summary>Topology never changes: allocate buffers and triangles once.</summary>
+        private void AllocateMesh()
         {
-            _builtRadius = _radius;
-            _builtColor = _color;
-
             int ringVerts = (Segments + 1) * 2;
-            var vertices = new Vector3[ringVerts * 2];
-            var colors = new Color[vertices.Length];
+            _vertices = new Vector3[ringVerts * 2];
+            _colors = new Color[_vertices.Length];
             var triangles = new int[Segments * 6 * 2];
-
-            float inner = Mathf.Max(0f, _radius - ringWidth);
-            Color solid = _color;
-            Color wallBottom = new Color(_color.r, _color.g, _color.b, wallOpacity);
-            Color wallTop = new Color(_color.r, _color.g, _color.b, 0f);
-
-            for (int i = 0; i <= Segments; i++)
-            {
-                float a = i / (float)Segments * Mathf.PI * 2f;
-                var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
-
-                // Ring on the ground.
-                vertices[i * 2] = dir * inner;
-                vertices[i * 2 + 1] = dir * _radius;
-                colors[i * 2] = solid;
-                colors[i * 2 + 1] = solid;
-
-                // Cylinder wall.
-                int w = ringVerts + i * 2;
-                vertices[w] = dir * _radius;
-                vertices[w + 1] = dir * _radius + Vector3.up * wallHeight;
-                colors[w] = wallBottom;
-                colors[w + 1] = wallTop;
-            }
 
             int t = 0;
             for (int pass = 0; pass < 2; pass++)
@@ -157,10 +137,43 @@ namespace HoloTable.Games.Warhammer
                 }
             }
 
-            _mesh.Clear();
-            _mesh.vertices = vertices;
-            _mesh.colors = colors;
+            _mesh.vertices = _vertices;
+            _mesh.colors = _colors;
             _mesh.triangles = triangles;
+        }
+
+        private void Rebuild()
+        {
+            _builtRadius = _radius;
+            _builtColor = _color;
+
+            int ringVerts = (Segments + 1) * 2;
+            float inner = Mathf.Max(0f, _radius - ringWidth);
+            Color solid = _color;
+            Color wallBottom = new Color(_color.r, _color.g, _color.b, wallOpacity);
+            Color wallTop = new Color(_color.r, _color.g, _color.b, 0f);
+
+            for (int i = 0; i <= Segments; i++)
+            {
+                float a = i / (float)Segments * Mathf.PI * 2f;
+                var dir = new Vector3(Mathf.Sin(a), 0f, Mathf.Cos(a));
+
+                // Ring on the ground.
+                _vertices[i * 2] = dir * inner;
+                _vertices[i * 2 + 1] = dir * _radius;
+                _colors[i * 2] = solid;
+                _colors[i * 2 + 1] = solid;
+
+                // Cylinder wall.
+                int w = ringVerts + i * 2;
+                _vertices[w] = dir * _radius;
+                _vertices[w + 1] = dir * _radius + Vector3.up * wallHeight;
+                _colors[w] = wallBottom;
+                _colors[w + 1] = wallTop;
+            }
+
+            _mesh.vertices = _vertices;
+            _mesh.colors = _colors;
             _mesh.RecalculateBounds();
         }
     }

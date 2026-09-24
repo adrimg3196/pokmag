@@ -33,7 +33,7 @@ namespace HoloTable.Domain.Mtg
 
     public sealed record MtgCreature(string Name, int Power, int Toughness, MtgKeyword Keywords)
     {
-        public bool Has(MtgKeyword keyword) => (Keywords & keyword) == keyword;
+        public bool Has(MtgKeyword keyword) => keyword != MtgKeyword.None && (Keywords & keyword) == keyword;
     }
 
     public sealed record MtgCombatOutcome(
@@ -43,17 +43,19 @@ namespace HoloTable.Domain.Mtg
         int DamageToDefendingPlayer,
         int LifeGainedByAttacker,
         bool BlockerDies,
-        bool AttackerDies);
+        bool AttackerDies,
+        int LifeGainedByDefender = 0);
 
     /// <summary>
     /// Extracts evergreen keywords from Oracle text in English and Spanish
     /// ("Flying" / "Vuela"), so both card printings drive the same behaviour.
+    /// Parenthesised reminder text is ignored: "Reach (…creatures with flying.)" is not a flier.
     /// </summary>
     public static class MtgKeywordParser
     {
         private static readonly (MtgKeyword Keyword, Regex Pattern)[] Patterns =
         {
-            (MtgKeyword.Flying, Build("flying|vuela|volar")),
+            (MtgKeyword.Flying, Build("flying|vuela")),
             (MtgKeyword.Reach, Build("reach|alcance")),
             (MtgKeyword.Vigilance, Build("vigilance|vigilancia")),
             (MtgKeyword.Trample, Build("trample|arrolla|arrollar")),
@@ -71,10 +73,11 @@ namespace HoloTable.Domain.Mtg
                 return MtgKeyword.None;
             }
 
+            string withoutReminders = ReminderText.Replace(rulesText, " ");
             MtgKeyword result = MtgKeyword.None;
             foreach ((MtgKeyword keyword, Regex pattern) in Patterns)
             {
-                if (pattern.IsMatch(rulesText))
+                if (pattern.IsMatch(withoutReminders))
                 {
                     result |= keyword;
                 }
@@ -83,6 +86,8 @@ namespace HoloTable.Domain.Mtg
             return result;
         }
 
+        private static readonly Regex ReminderText = new Regex(@"\([^)]*\)", RegexOptions.Compiled);
+
         private static Regex Build(string alternatives) =>
             new Regex($"(?<![\\p{{L}}])({alternatives})(?![\\p{{L}}])",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
@@ -90,14 +95,22 @@ namespace HoloTable.Domain.Mtg
 
     public static class MtgCombatRules
     {
-        public static bool CanAttack(MtgCreature creature, bool summoningSick) =>
-            !creature.Has(MtgKeyword.Defender) && (!summoningSick || creature.Has(MtgKeyword.Haste));
+        public static bool CanAttack(MtgCreature creature, bool summoningSick)
+        {
+            if (creature == null) throw new ArgumentNullException(nameof(creature));
+            return !creature.Has(MtgKeyword.Defender) && (!summoningSick || creature.Has(MtgKeyword.Haste));
+        }
 
         /// <summary>A flier can only be blocked by creatures with flying or reach.</summary>
-        public static bool CanBlock(MtgCreature attacker, MtgCreature blocker) =>
-            !attacker.Has(MtgKeyword.Flying)
-            || blocker.Has(MtgKeyword.Flying)
-            || blocker.Has(MtgKeyword.Reach);
+        public static bool CanBlock(MtgCreature attacker, MtgCreature blocker)
+        {
+            if (attacker == null) throw new ArgumentNullException(nameof(attacker));
+            if (blocker == null) throw new ArgumentNullException(nameof(blocker));
+
+            return !attacker.Has(MtgKeyword.Flying)
+                || blocker.Has(MtgKeyword.Flying)
+                || blocker.Has(MtgKeyword.Reach);
+        }
 
         /// <summary>
         /// Picks the blocker that survives and deals the most damage; ties broken by list order.
@@ -105,6 +118,9 @@ namespace HoloTable.Domain.Mtg
         /// </summary>
         public static int ChooseBestBlocker(MtgCreature attacker, IReadOnlyList<MtgCreature> candidates, int attackerDamageTaken = 0)
         {
+            if (attacker == null) throw new ArgumentNullException(nameof(attacker));
+            if (candidates == null) throw new ArgumentNullException(nameof(candidates));
+
             int best = -1;
             int bestScore = int.MinValue;
             for (int i = 0; i < candidates.Count; i++)
@@ -137,11 +153,10 @@ namespace HoloTable.Domain.Mtg
             if (attacker == null) throw new ArgumentNullException(nameof(attacker));
 
             int power = Math.Max(0, attacker.Power);
-            int lifelinkGain = attacker.Has(MtgKeyword.Lifelink) ? power : 0;
 
             if (blocker == null)
             {
-                return new MtgCombatOutcome(false, 0, 0, power, lifelinkGain, false, false);
+                return new MtgCombatOutcome(false, 0, 0, power, attacker.Has(MtgKeyword.Lifelink) ? power : 0, false, false);
             }
 
             int blockerRemaining = Math.Max(0, blocker.Toughness - blockerDamageTaken);
@@ -174,10 +189,13 @@ namespace HoloTable.Domain.Mtg
                 toBlocker = 0;
                 trampleOver = 0;
                 blockerDies = false;
-                lifelinkGain = 0;
             }
 
-            return new MtgCombatOutcome(true, toBlocker, toAttacker, trampleOver, lifelinkGain, blockerDies, attackerDies);
+            // CR 702.15b: lifelink gains life equal to all damage its source actually dealt.
+            int attackerGain = attacker.Has(MtgKeyword.Lifelink) ? toBlocker + trampleOver : 0;
+            int defenderGain = blocker.Has(MtgKeyword.Lifelink) ? toAttacker : 0;
+
+            return new MtgCombatOutcome(true, toBlocker, toAttacker, trampleOver, attackerGain, blockerDies, attackerDies, defenderGain);
         }
     }
 }

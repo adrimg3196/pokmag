@@ -19,6 +19,7 @@ namespace HoloTable.Adapters
         [Tooltip("On most devices Limited means 'not visible'. Disable to freeze holograms instead of dissolving them.")]
         [SerializeField] private bool treatLimitedAsLost = true;
 
+        private readonly System.Collections.Generic.HashSet<string> _reported = new System.Collections.Generic.HashSet<string>();
         private ARTrackedImageManager _manager;
 
         private void Awake() => _manager = GetComponent<ARTrackedImageManager>();
@@ -39,6 +40,14 @@ namespace HoloTable.Adapters
 #else
             _manager.trackedImagesChanged -= OnTrackedImagesChanged;
 #endif
+            // No more updates will arrive: release every card we reported, or its hologram freezes forever.
+            HoloSpawnDirector director = HoloSpawnDirector.Instance;
+            if (director != null)
+            {
+                foreach (string id in _reported) director.ReportLost(id);
+            }
+
+            _reported.Clear();
         }
 
 #if HOLO_ARF6
@@ -59,13 +68,14 @@ namespace HoloTable.Adapters
 
         private void Process(ARTrackedImage image)
         {
-            HoloSpawnDirector director = HoloSpawnDirector.Instance;
+            HoloSpawnDirector director = HoloSpawnDirector.ForAdapter(this);
             if (director == null) return;
 
             string id = image.trackableId.ToString();
             switch (image.trackingState)
             {
                 case TrackingState.Tracking:
+                    _reported.Add(id);
                     director.ReportFound(id, image.referenceImage.name, image.transform, image.size);
                     break;
                 case TrackingState.Limited when !treatLimitedAsLost:
@@ -77,10 +87,12 @@ namespace HoloTable.Adapters
             }
         }
 
-        private static void Lost(TrackableId id)
+        private void Lost(TrackableId id)
         {
+            string key = id.ToString();
+            _reported.Remove(key);
             HoloSpawnDirector director = HoloSpawnDirector.Instance;
-            if (director != null) director.ReportLost(id.ToString());
+            if (director != null) director.ReportLost(key);
         }
     }
 }

@@ -15,6 +15,7 @@ namespace HoloTable.Core
         private static readonly List<LivingEntityController> Entities = new List<LivingEntityController>();
         private static readonly Dictionary<int, LivingEntityController> ById = new Dictionary<int, LivingEntityController>();
         private static readonly List<LookCandidate> CandidateBuffer = new List<LookCandidate>();
+        private static int _bufferFrame = -1;
 
         public static IReadOnlyList<LivingEntityController> All => Entities;
 
@@ -23,6 +24,8 @@ namespace HoloTable.Core
         {
             Entities.Clear();
             ById.Clear();
+            CandidateBuffer.Clear();
+            _bufferFrame = -1;
         }
 
         internal static void Register(LivingEntityController entity)
@@ -43,10 +46,15 @@ namespace HoloTable.Core
 
         public static LivingEntityController FindNearestRival(LivingEntityController self, float radius)
         {
-            CandidateBuffer.Clear();
-            foreach (LivingEntityController e in Entities)
+            if (_bufferFrame != Time.frameCount)
             {
-                CandidateBuffer.Add(new LookCandidate(e.EntityId, e.transform.position.ToNumerics(), e.Side, e.IsAlive));
+                // Built once per frame and shared by every caller (O(n) instead of O(n²)).
+                _bufferFrame = Time.frameCount;
+                CandidateBuffer.Clear();
+                foreach (LivingEntityController e in Entities)
+                {
+                    CandidateBuffer.Add(new LookCandidate(e.EntityId, e.transform.position.ToNumerics(), e.Side, e.IsTargetable));
+                }
             }
 
             int id = LookTargetSelector.SelectNearestRival(
@@ -62,7 +70,7 @@ namespace HoloTable.Core
             float bestSqr = radius * radius;
             foreach (LivingEntityController e in Entities)
             {
-                if (!e.IsAlive || e.Side != side) continue;
+                if (!e.IsTargetable || e.Side != side) continue;
                 if (filter != null && !filter(e)) continue;
 
                 float sqr = (e.transform.position - point).sqrMagnitude;
@@ -81,7 +89,7 @@ namespace HoloTable.Core
             results.Clear();
             foreach (LivingEntityController e in Entities)
             {
-                if (e.IsAlive && e.Side == side) results.Add(e);
+                if (e.IsTargetable && e.Side == side) results.Add(e);
             }
         }
     }

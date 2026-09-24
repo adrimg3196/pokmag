@@ -58,7 +58,11 @@ namespace HoloTable.Domain.Pokemon
         }
 
         /// <summary>Damage counters stay on the Pokémon when it evolves.</summary>
-        public static Vitals CarryDamage(Vitals previous, int newMaxHp) => previous.WithMaxKeepingDamage(newMaxHp);
+        public static Vitals CarryDamage(Vitals previous, int newMaxHp)
+        {
+            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            return previous.WithMaxKeepingDamage(newMaxHp);
+        }
     }
 
     public static class PokemonDamageCalculator
@@ -72,8 +76,9 @@ namespace HoloTable.Domain.Pokemon
             if (baseDamage < 0) throw new ArgumentOutOfRangeException(nameof(baseDamage));
             if (defender == null) throw new ArgumentNullException(nameof(defender));
 
-            bool weak = IsMatch(attackerType, defender.Weakness);
-            bool resist = IsMatch(attackerType, defender.Resistance);
+            // An attack that does no damage applies neither Weakness nor Resistance.
+            bool weak = baseDamage > 0 && IsMatch(attackerType, defender.Weakness);
+            bool resist = baseDamage > 0 && IsMatch(attackerType, defender.Resistance);
 
             int amount = baseDamage;
             if (weak) amount *= WeaknessMultiplier;

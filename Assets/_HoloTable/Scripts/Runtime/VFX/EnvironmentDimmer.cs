@@ -36,6 +36,7 @@ namespace HoloTable.VFX
         private float _flash;
         private Color _flashColor = Color.white;
         private Coroutine _pulse;
+        private Action _pendingPeak;
 
         /// <summary>Scene dimmer, auto-created on first use.</summary>
         public static EnvironmentDimmer Current
@@ -76,7 +77,9 @@ namespace HoloTable.VFX
         private void OnDestroy()
         {
             if (_instance == this) _instance = null;
+            FirePendingPeak();
             ApplyLevel(0f);
+            if (_overlay != null) Destroy(_overlay.gameObject); // parented to the camera: would outlive us
             if (_overlayRuntimeMaterial != null) Destroy(_overlayRuntimeMaterial);
         }
 
@@ -84,8 +87,10 @@ namespace HoloTable.VFX
         public void Pulse(float amount, float fadeIn, float hold, float fadeOut, Color? tint = null, Action onPeak = null)
         {
             if (_pulse != null) StopCoroutine(_pulse);
+            FirePendingPeak(); // a replaced pulse must still release whoever waits for its peak
             _tint = tint ?? Color.black;
-            _pulse = StartCoroutine(PulseRoutine(Mathf.Clamp01(amount), fadeIn, hold, fadeOut, onPeak));
+            _pendingPeak = onPeak;
+            _pulse = StartCoroutine(PulseRoutine(Mathf.Clamp01(amount), fadeIn, hold, fadeOut));
         }
 
         /// <summary>Very short bright flash (lightning strike, explosion).</summary>
@@ -95,7 +100,14 @@ namespace HoloTable.VFX
             _flash = Mathf.Clamp01(intensity);
         }
 
-        private IEnumerator PulseRoutine(float amount, float fadeIn, float hold, float fadeOut, Action onPeak)
+        private void FirePendingPeak()
+        {
+            Action peak = _pendingPeak;
+            _pendingPeak = null;
+            peak?.Invoke();
+        }
+
+        private IEnumerator PulseRoutine(float amount, float fadeIn, float hold, float fadeOut)
         {
             float start = _level;
             for (float t = 0f; t < fadeIn; t += Time.deltaTime)
@@ -105,7 +117,7 @@ namespace HoloTable.VFX
             }
 
             ApplyLevel(amount);
-            onPeak?.Invoke();
+            FirePendingPeak();
             yield return new WaitForSeconds(hold);
 
             for (float t = 0f; t < fadeOut; t += Time.deltaTime)

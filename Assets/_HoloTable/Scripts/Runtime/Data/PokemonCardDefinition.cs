@@ -66,7 +66,7 @@ namespace HoloTable.Data
             resistance,
             hp);
 
-        public override string BuildStatLine() => $"{stage}  ·  {Element}";
+        public override string BuildStatLine(int attack, int defense, int maxHp) => $"{stage}  ·  {Element}";
 
         private void OnValidate() => _species = null;
     }

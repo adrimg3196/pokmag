@@ -1,3 +1,4 @@
+#nullable enable
 using System;
 
 namespace HoloTable.Domain
@@ -14,10 +15,15 @@ namespace HoloTable.Domain
 
     public static class RandomSourceExtensions
     {
-        public static int RollD6(this IRandomSource random) => random.Range(1, 7);
+        public static int RollD6(this IRandomSource random)
+        {
+            if (random == null) throw new ArgumentNullException(nameof(random));
+            return random.Range(1, 7);
+        }
 
         public static int[] RollD6(this IRandomSource random, int count)
         {
+            if (random == null) throw new ArgumentNullException(nameof(random));
             if (count < 0) throw new ArgumentOutOfRangeException(nameof(count));
 
             var results = new int[count];

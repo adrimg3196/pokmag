@@ -22,7 +22,7 @@ namespace HoloTable.Tracking
 
         public void OnTargetFound()
         {
-            HoloSpawnDirector director = HoloSpawnDirector.Instance;
+            HoloSpawnDirector director = HoloSpawnDirector.ForAdapter(this);
             if (director == null) return;
 
             string reference = string.IsNullOrEmpty(referenceName) ? gameObject.name : referenceName;

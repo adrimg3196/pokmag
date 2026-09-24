@@ -112,7 +112,8 @@ namespace HoloTable.Combat
         private void OnDisable()
         {
             // Pool/scene teardown while flying: still resolve the hit so combat never stalls.
-            if (_flying && _target != null) Arrive(_target());
+            // Uses the current position: the target may already be destroyed during teardown.
+            if (_flying) Arrive(transform.position);
         }
     }
 }

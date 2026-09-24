@@ -11,6 +11,10 @@ namespace HoloTable.Games.Warhammer
     [RequireComponent(typeof(Rigidbody))]
     public sealed class ARDie : MonoBehaviour
     {
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+
         [Serializable]
         private struct Face
         {
@@ -49,6 +53,9 @@ namespace HoloTable.Games.Warhammer
         public bool IsRolling { get; private set; }
         public bool IsCocked { get; private set; }
         public int Result { get; private set; }
+
+        /// <summary>Re-rolls triggered by landing cocked during the current request.</summary>
+        public int RerollCount { get; internal set; }
         public Rigidbody Body => _body;
 
         private void Awake()
@@ -91,9 +98,9 @@ namespace HoloTable.Games.Warhammer
             foreach (Renderer r in _renderers)
             {
                 r.GetPropertyBlock(_block);
-                _block.SetColor("_EmissionColor", color * strength);
-                _block.SetColor("_BaseColor", Color.Lerp(Color.white, color, strength * 0.6f));
-                _block.SetColor("_Color", Color.Lerp(Color.white, color, strength * 0.6f));
+                _block.SetColor(EmissionColorId, color * strength);
+                _block.SetColor(BaseColorId, Color.Lerp(Color.white, color, strength * 0.6f));
+                _block.SetColor(ColorId, Color.Lerp(Color.white, color, strength * 0.6f));
                 r.SetPropertyBlock(_block);
             }
         }
@@ -117,6 +124,9 @@ namespace HoloTable.Games.Warhammer
                 Settled?.Invoke(this);
             }
         }
+
+        /// <summary>Re-reads the upward face (another die may have knocked this one over).</summary>
+        public void RefreshResult() => ReadFace();
 
         private void ReadFace()
         {

@@ -14,6 +14,7 @@ namespace HoloTable.VFX
 
         private LineRenderer _line;
         private Light _light;
+        private Material _ownedMaterial;
 
         public static LightningBoltEffect Strike(Vector3 from, Vector3 to, Color color, float duration = 0.45f, float width = 0.006f, Material material = null)
         {
@@ -39,7 +40,8 @@ namespace HoloTable.VFX
 
         private void Play(Vector3 from, Vector3 to, Color color, float duration, float width, Material material)
         {
-            _line.sharedMaterial = material != null ? material : HoloMaterials.CreateUnlitTransparent(Color.white);
+            if (material == null) _ownedMaterial = HoloMaterials.CreateUnlitTransparent(Color.white);
+            _line.sharedMaterial = material != null ? material : _ownedMaterial;
             _line.startColor = Color.white;
             _line.endColor = color;
             _light.color = color;
@@ -73,8 +75,13 @@ namespace HoloTable.VFX
                 yield return new WaitForSeconds(0.04f);
             }
 
-            Destroy(_line.sharedMaterial);
             Destroy(gameObject);
+        }
+
+        private void OnDestroy()
+        {
+            // Only destroy what we created: a caller-supplied material may be a project asset.
+            if (_ownedMaterial != null) Destroy(_ownedMaterial);
         }
     }
 }

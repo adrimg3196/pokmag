@@ -33,10 +33,34 @@ namespace HoloTable.Adapters
         private readonly Queue<Sample> _history = new Queue<Sample>();
         private XRHandSubsystem _hands;
         private Handedness _holding = Handedness.Invalid;
+        private float _enabledAt;
+        private bool _warnedNoHands;
+
+        private void OnEnable() => _enabledAt = Time.time;
 
         private void Update()
         {
-            if (tray == null || !EnsureSubsystem()) return;
+            if (tray == null)
+            {
+                if (!_warnedNoHands)
+                {
+                    _warnedNoHands = true;
+                    Debug.LogWarning("[HoloTable] HandDiceThrower has no DiceTray assigned.", this);
+                }
+
+                return;
+            }
+
+            if (!EnsureSubsystem())
+            {
+                if (!_warnedNoHands && Time.time - _enabledAt > 5f)
+                {
+                    _warnedNoHands = true;
+                    Debug.LogWarning("[HoloTable] No running XRHandSubsystem after 5s: hand-thrown dice unavailable (enable Hand Tracking in OpenXR features). Dice will auto-throw after the timeout.", this);
+                }
+
+                return;
+            }
 
             ProcessHand(_hands.leftHand);
             ProcessHand(_hands.rightHand);

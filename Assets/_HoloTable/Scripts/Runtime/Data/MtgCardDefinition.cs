@@ -54,7 +54,8 @@ namespace HoloTable.Data
 
         public MtgCreature Creature => _creature ??= new MtgCreature(DisplayName, power, toughness, Keywords);
 
-        public override string BuildStatLine() => IsCreature ? $"{manaCost}   {power}/{toughness}" : $"{manaCost}   {kind}";
+        public override string BuildStatLine(int attack, int defense, int maxHp) =>
+            IsCreature ? $"{manaCost}   {attack}/{maxHp}" : $"{manaCost}   {kind}";
 
         private void OnValidate()
         {

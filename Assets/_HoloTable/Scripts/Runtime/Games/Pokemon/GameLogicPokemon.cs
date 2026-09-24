@@ -50,8 +50,7 @@ namespace HoloTable.Games.Pokemon
         [Header("Evolution")]
         [Tooltip("Stacked if the new card centre is within this fraction of the card's short side.")]
         [SerializeField, Range(0.1f, 1.5f)] private float stackTolerance = 0.6f;
-        [Tooltip("Seconds the previous stage waits as a ghost after its card disappears, allowing a swap.")]
-        [SerializeField, Min(0f)] private float replaceWindow = 2.5f;
+        [Tooltip("Max distance (metres) between the removed card and the evolution put in its place. The ghost time is HoloSpawnDirector.pokemonPersistence.")]
         [SerializeField, Min(0.01f)] private float replaceMaxDistance = 0.06f;
         [SerializeField, Min(0.5f)] private float evolutionDuration = 3f;
         [SerializeField] private ParticleSystem evolutionCocoonVfx;
@@ -67,7 +66,6 @@ namespace HoloTable.Games.Pokemon
         [SerializeField] private List<ElementVfx> elements = new List<ElementVfx>();
 
         private readonly Dictionary<LivingEntityController, PokemonState> _states = new Dictionary<LivingEntityController, PokemonState>();
-        private readonly Dictionary<LivingEntityController, Coroutine> _limbo = new Dictionary<LivingEntityController, Coroutine>();
         private readonly HashSet<LivingEntityController> _evolving = new HashSet<LivingEntityController>();
 
         public GameSystem System => GameSystem.Pokemon;
@@ -126,15 +124,11 @@ namespace HoloTable.Games.Pokemon
             RefreshResource(entity, state);
         }
 
-        public bool OnTargetLost(TrackedTarget target, LivingEntityController entity)
-        {
-            if (entity == null || !_states.ContainsKey(entity) || _evolving.Contains(entity)) return false;
-
-            // Keep the Pokémon as a ghost for a moment: the player may be swapping in its evolution.
-            entity.SetGhosted(true);
-            _limbo[entity] = StartCoroutine(LimboRoutine(entity));
-            return true;
-        }
+        /// <summary>
+        /// The director keeps a lost Pokémon as a ghost (pokemonPersistence) and re-attaches it if the
+        /// same card returns; an evolution placed in the same spot meanwhile evolves the ghost.
+        /// </summary>
+        public bool OnTargetLost(TrackedTarget target, LivingEntityController entity) => false;
 
         // ─────────────────────────────── Public gameplay API ───────────────────────────────
 
@@ -147,11 +141,7 @@ namespace HoloTable.Games.Pokemon
 
             state.Energies.Add(energy);
             ElementVfx vfx = FindVfx(energy);
-            if (vfx?.attachBurst != null)
-            {
-                ParticleSystem burst = Instantiate(vfx.attachBurst, pokemon.CenterWorld, Quaternion.identity);
-                Destroy(burst.gameObject, 3f);
-            }
+            if (vfx != null) VfxPool.Play(vfx.attachBurst, pokemon.CenterWorld, Quaternion.identity);
 
             DamagePopupService.ShowText(pokemon.TopWorld, $"+ {energy}", vfx?.color ?? Color.white, 0.8f);
             RefreshResource(pokemon, state);
@@ -161,9 +151,25 @@ namespace HoloTable.Games.Pokemon
         /// <summary>Validates energy cost, computes weakness/resistance and launches the attack.</summary>
         public bool DeclareAttack(LivingEntityController attacker, LivingEntityController defender, int attackIndex = 0)
         {
-            if (attacker == null || defender == null || !attacker.CanAct || !defender.IsAlive) return false;
+            if (attacker == null || defender == null) return false;
+            if (!attacker.CanAct)
+            {
+                DamagePopupService.ShowInfo(attacker.TopWorld, "Ahora no puede atacar");
+                return false;
+            }
+
+            if (!defender.IsTargetable)
+            {
+                DamagePopupService.ShowInfo(attacker.TopWorld, "Objetivo no válido");
+                return false;
+            }
+
             if (!(attacker.Definition is PokemonCardDefinition card) || !(defender.Definition is PokemonCardDefinition target)) return false;
-            if (attackIndex < 0 || attackIndex >= card.Attacks.Count) return false;
+            if (attackIndex < 0 || attackIndex >= card.Attacks.Count)
+            {
+                Debug.LogWarning($"[HoloTable] {card.name} has no attack #{attackIndex}.", card);
+                return false;
+            }
 
             PokemonAttackData attack = card.Attacks[attackIndex];
             if (!EnergyRules.CanPayCost(GetEnergies(attacker), attack.Cost))
@@ -205,6 +211,12 @@ namespace HoloTable.Games.Pokemon
             ARCombatManager combat = ARCombatManager.Instance;
             LivingEntityController rival = combat != null ? combat.FindEngagedRival(attacker) : null;
             if (rival == null) rival = EntityRegistry.FindNearestRival(attacker, 2f);
+            if (rival == null)
+            {
+                DamagePopupService.ShowInfo(attacker.TopWorld, "Sin rival a la vista");
+                return false;
+            }
+
             return DeclareAttack(attacker, rival, attackIndex);
         }
 
@@ -221,7 +233,7 @@ namespace HoloTable.Games.Pokemon
 
             foreach (LivingEntityController candidate in context.Director.ActiveEntities)
             {
-                if (candidate == null || !candidate.IsAlive || _evolving.Contains(candidate)) continue;
+                if (candidate == null || !candidate.IsTargetable || _evolving.Contains(candidate)) continue;
                 if (candidate.Side != context.Side && context.Side != PlayerSide.Neutral) continue;
                 if (!(candidate.Definition is PokemonCardDefinition current)) continue;
                 if (!EvolutionRules.CanEvolve(current.Species, card.Species)) continue;
@@ -233,11 +245,11 @@ namespace HoloTable.Games.Pokemon
                 bool stacked = EvolutionRules.IsStackedOver(
                     table.ToTable2D(oldPos), table.ToTable2D(newPos), shortSide, stackTolerance);
 
-                float sinceLost = oldTarget == null ? 0f
-                    : oldTarget.Status == TrackingStatus.Lost ? Time.time - oldTarget.LostTime
-                    : -1f;
-                bool replaced = _limbo.ContainsKey(candidate)
-                    || EvolutionRules.IsReplacement(sinceLost, replaceWindow, distance, replaceMaxDistance);
+                // Replacement: the previous card is gone (ghost or inside its grace period) and the
+                // evolution was put down in the same spot.
+                bool previousGone = context.Director.IsOrphan(candidate)
+                    || (oldTarget != null && oldTarget.Status == TrackingStatus.Lost);
+                bool replaced = previousGone && distance <= replaceMaxDistance;
 
                 if ((stacked || replaced) && distance < bestDistance)
                 {
@@ -252,42 +264,38 @@ namespace HoloTable.Games.Pokemon
         private IEnumerator EvolutionRoutine(LivingEntityController previous, PokemonCardDefinition evolution, SpawnContext context)
         {
             _evolving.Add(previous);
-            CancelLimbo(previous);
-            previous.SetGhosted(false);
-            context.Director.DetachEntity(previous);
-            previous.BeginTransformation();
-
-            PokemonState oldState = _states.TryGetValue(previous, out PokemonState s) ? s : null;
-            Vector3 center = previous.CenterWorld;
-
-            if (evolutionSfx != null) AudioSource.PlayClipAtPoint(evolutionSfx, center);
-            ParticleSystem cocoon = null;
-            if (evolutionCocoonVfx != null)
-            {
-                cocoon = Instantiate(evolutionCocoonVfx, previous.GroundWorld, Quaternion.identity);
-                cocoon.transform.localScale = Vector3.one * Mathf.Max(0.5f, previous.WorldHeight / 0.1f);
-                cocoon.Play(true);
-            }
-
-            EnvironmentDimmer.Current.Pulse(0.45f, 0.4f, evolutionDuration * 0.7f, 0.8f);
 
             LivingEntityController next = context.Director.SpawnEntity(evolution, context.Target, previous.Side, playSpawn: false);
             if (next == null)
             {
-                previous.EndTransformation();
+                // Keep the previous stage exactly as it was (still linked to its card / ghost timer).
                 _evolving.Remove(previous);
+                Debug.LogWarning($"[HoloTable] Evolution to '{evolution.DisplayName}' failed: no prefab. {previous.name} stays.", evolution);
                 yield break;
             }
 
+            previous.SetGhosted(false);
+            context.Director.DetachEntity(previous);
+            previous.BeginTransformation();
             next.BeginTransformation();
             next.SetVisible(false);
             next.ReplaceVitals(EvolutionRules.CarryDamage(previous.Vitals, evolution.BaseMaxHp));
+
+            PokemonState oldState = _states.TryGetValue(previous, out PokemonState s) ? s : null;
+            Vector3 center = previous.CenterWorld;
+            string previousName = previous.Definition.DisplayName;
+
+            if (evolutionSfx != null) AudioSource.PlayClipAtPoint(evolutionSfx, center);
+            float fxScale = Mathf.Max(0.5f, previous.WorldHeight / 0.1f);
+            ParticleSystem cocoon = VfxPool.Play(evolutionCocoonVfx, previous.GroundWorld, Quaternion.identity, fxScale);
+
+            EnvironmentDimmer.Current.Pulse(0.45f, 0.4f, evolutionDuration * 0.7f, 0.8f);
 
             // Classic evolution: both silhouettes turn white and alternate faster and faster.
             float elapsed = 0f;
             float interval = 0.35f;
             bool showNew = false;
-            while (elapsed < evolutionDuration)
+            while (elapsed < evolutionDuration && next != null && previous != null)
             {
                 float whiten = Mathf.Clamp01(elapsed / (evolutionDuration * 0.3f));
                 previous.SetFlash(whiten, Color.white);
@@ -302,33 +310,29 @@ namespace HoloTable.Games.Pokemon
                 interval = Mathf.Max(0.04f, interval * 0.8f);
             }
 
-            if (evolutionBurstVfx != null)
+            if (cocoon != null) cocoon.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            _evolving.Remove(previous);
+            if (previous != null) previous.Despawn(animated: false);
+
+            if (next == null || !next.IsAlive)
             {
-                ParticleSystem burst = Instantiate(evolutionBurstVfx, center, Quaternion.identity);
-                burst.transform.localScale = Vector3.one * Mathf.Max(0.5f, next.WorldHeight / 0.1f);
-                Destroy(burst.gameObject, 4f);
+                // Destroyed or KO'd mid-sequence (card removed, scene change): nothing to reveal.
+                yield break;
             }
 
+            VfxPool.Play(evolutionBurstVfx, center, Quaternion.identity, Mathf.Max(0.5f, next.WorldHeight / 0.1f));
             EnvironmentDimmer.Current.Flash(Color.white, 0.8f);
-            if (cocoon != null)
-            {
-                cocoon.Stop(true, ParticleSystemStopBehavior.StopEmitting);
-                Destroy(cocoon.gameObject, 3f);
-            }
 
-            // Carry energies over, then remove the old stage without a death animation.
+            // Carry energies over to the new stage.
             if (oldState != null && _states.TryGetValue(next, out PokemonState newState))
             {
                 foreach (ElementType e in oldState.Energies) newState.Energies.Add(e);
                 RefreshResource(next, newState);
             }
 
-            _evolving.Remove(previous);
-            previous.Despawn(animated: false);
-
             next.ForceMaterialized();
             StartCoroutine(FadeFlash(next, 0.6f));
-            DamagePopupService.ShowText(next.TopWorld, $"¡{previous.Definition.DisplayName} evolucionó a {evolution.DisplayName}!", Color.white, 0.7f);
+            DamagePopupService.ShowText(next.TopWorld, $"¡{previousName} evolucionó a {evolution.DisplayName}!", Color.white, 0.7f);
             Evolved?.Invoke(previous, next);
         }
 
@@ -341,27 +345,6 @@ namespace HoloTable.Games.Pokemon
             }
 
             if (entity != null) entity.SetFlash(0f, Color.white);
-        }
-
-        private IEnumerator LimboRoutine(LivingEntityController entity)
-        {
-            yield return new WaitForSeconds(replaceWindow);
-            _limbo.Remove(entity);
-            if (entity != null && !_evolving.Contains(entity))
-            {
-                HoloSpawnDirector director = HoloSpawnDirector.Instance;
-                if (director != null) director.DespawnEntity(entity);
-                else entity.Despawn();
-            }
-        }
-
-        private void CancelLimbo(LivingEntityController entity)
-        {
-            if (_limbo.TryGetValue(entity, out Coroutine routine))
-            {
-                if (routine != null) StopCoroutine(routine);
-                _limbo.Remove(entity);
-            }
         }
 
         // ─────────────────────────────── Energy & aura ───────────────────────────────
@@ -423,7 +406,6 @@ namespace HoloTable.Games.Pokemon
         {
             entity.Despawned -= OnDespawned;
             _states.Remove(entity);
-            CancelLimbo(entity);
             _evolving.Remove(entity);
         }
     }

@@ -130,6 +130,8 @@ namespace HoloTable.Entities
         private Vector3? _lookPointOverride;
         private LivingEntityController _rivalTarget;
         private float _nextRetargetTime;
+        private bool _hasLookPoint;
+        private Vector3 _lookPoint;
         private Vector3 _smoothedLookDir = Vector3.forward;
         private float _lookWeight;
         private Quaternion _headOffset = Quaternion.identity;
@@ -164,6 +166,9 @@ namespace HoloTable.Entities
 
         public bool IsAlive => State != EntityState.Dying && State != EntityState.Dead && !Vitals.IsDefeated;
         public bool CanAct => State == EntityState.Idle || State == EntityState.Hurt;
+
+        /// <summary>Can be attacked / engaged / stared at. False while summoning, transforming or dying.</summary>
+        public bool IsTargetable => IsAlive && State != EntityState.Dormant && State != EntityState.Transforming;
         public float HoverHeight => _hoverCurrent;
         public float WorldHeight => Scale != null ? Scale.WorldHeight : _nativeHeight;
         public float WorldFootprint => Scale != null ? Scale.WorldFootprint : 0.05f;
@@ -181,6 +186,7 @@ namespace HoloTable.Entities
         {
             EntityId = _nextEntityId++;
             _phase = UnityEngine.Random.value * 10f;
+            _nextRetargetTime = UnityEngine.Random.value * retargetInterval; // spread retargets across frames
             EnsureVisualRoot();
 
             if (animator == null) animator = GetComponentInChildren<Animator>();
@@ -407,6 +413,8 @@ namespace HoloTable.Entities
         /// <summary>Instantly shows a fully materialised entity (used after evolution sequences).</summary>
         public void ForceMaterialized()
         {
+            if (State == EntityState.Dying || State == EntityState.Dead) return;
+
             StopAction();
             _spawnScale = 1f;
             _spawnRise = 0f;
@@ -456,6 +464,7 @@ namespace HoloTable.Entities
             _hoverCurrent = Mathf.MoveTowards(_hoverCurrent, _hoverTarget, _hoverSpeed * dt);
             _ghost = Mathf.MoveTowards(_ghost, _ghostTarget, dt * 2f);
 
+            _hasLookPoint = TryGetLookPoint(out _lookPoint); // once per frame, shared by body and head
             ComposeVisual(dt);
             UpdateLook(dt);
 
@@ -482,9 +491,9 @@ namespace HoloTable.Entities
             float scale = _baseScale * _spawnScale * breath;
             float bob = _hoverCurrent > 0.01f ? Mathf.Sin(t * 1.7f) * hoverBobAmplitude : 0f;
 
-            if (rotateBodyTowardsTarget && CanAct && TryGetLookPoint(out Vector3 lookPoint))
+            if (rotateBodyTowardsTarget && CanAct && _hasLookPoint)
             {
-                Vector3 flat = Vector3.ProjectOnPlane(lookPoint - transform.position, transform.up);
+                Vector3 flat = Vector3.ProjectOnPlane(_lookPoint - transform.position, transform.up);
                 if (flat.sqrMagnitude > 1e-5f)
                 {
                     float desired = Mathf.Clamp(Vector3.SignedAngle(transform.forward, flat, transform.up), -maxBodyYaw, maxBodyYaw);
@@ -500,7 +509,8 @@ namespace HoloTable.Entities
 
         private void UpdateLook(float dt)
         {
-            bool hasTarget = TryGetLookPoint(out Vector3 lookPoint) && State != EntityState.Dying && State != EntityState.Dead;
+            bool hasTarget = _hasLookPoint && State != EntityState.Dying && State != EntityState.Dead;
+            Vector3 lookPoint = _lookPoint;
             _lookWeight = Mathf.MoveTowards(_lookWeight, hasTarget ? 1f : 0f, dt * 2.5f);
             if (!hasTarget && _lookWeight <= 0f) return;
 
@@ -540,7 +550,7 @@ namespace HoloTable.Entities
                 return true;
             }
 
-            if (lookMode != LookMode.PlayerOnly && lookMode != LookMode.None && _rivalTarget != null && _rivalTarget.IsAlive)
+            if (lookMode != LookMode.PlayerOnly && lookMode != LookMode.None && _rivalTarget != null && _rivalTarget.IsTargetable)
             {
                 point = _rivalTarget.CenterWorld + _rivalTarget.Up * (_rivalTarget.WorldHeight * 0.3f);
                 return true;
@@ -783,11 +793,7 @@ namespace HoloTable.Entities
 
         private void PlayVfx(ParticleSystem prefab, Vector3 position)
         {
-            if (prefab == null) return;
-            ParticleSystem fx = Instantiate(prefab, position, Quaternion.LookRotation(transform.forward, Up));
-            fx.transform.localScale = Vector3.one * Mathf.Max(0.3f, WorldHeight / 0.1f);
-            fx.Play(true);
-            Destroy(fx.gameObject, fx.main.duration + fx.main.startLifetime.constantMax + 0.5f);
+            VfxPool.Play(prefab, position, Quaternion.LookRotation(transform.forward, Up), Mathf.Max(0.3f, WorldHeight / 0.1f));
         }
     }
 }

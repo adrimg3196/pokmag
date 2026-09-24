@@ -62,6 +62,8 @@ namespace HoloTable.Games.Warhammer
         [SerializeField] private bool usePhysicalDice = true;
         [Tooltip("Throw automatically (no hand tracking / demo).")]
         [SerializeField] private bool autoThrowDice;
+        [Tooltip("If nobody throws the dice within this time, they are thrown automatically.")]
+        [SerializeField, Min(3f)] private float diceThrowTimeout = 20f;
 
         [Header("Shooting")]
         [SerializeField] private HoloProjectile shotProjectile;
@@ -73,6 +75,8 @@ namespace HoloTable.Games.Warhammer
         private float _focusTime;
         private float _nextLos;
         private bool _busy;
+        private int _lastMoveLabelKey = int.MinValue;
+        private int _lastTargetTagKey = int.MinValue;
 
         public GameSystem System => GameSystem.Warhammer;
         public LivingEntityController Selected { get; private set; }
@@ -98,7 +102,11 @@ namespace HoloTable.Games.Warhammer
 
         private void OnEnable() => HoloSpawnDirector.RegisterModule(this);
 
-        private void OnDisable() => HoloSpawnDirector.UnregisterModule(this);
+        private void OnDisable()
+        {
+            HoloSpawnDirector.UnregisterModule(this);
+            _busy = false; // coroutines stop with the component; never stay locked
+        }
 
         // ─────────────────────────────── IGameRuleModule ───────────────────────────────
 
@@ -122,7 +130,12 @@ namespace HoloTable.Games.Warhammer
 
         public void Select(LivingEntityController unit)
         {
-            if (unit == null || !_units.TryGetValue(unit, out UnitState state) || _busy) return;
+            if (unit == null || !_units.TryGetValue(unit, out UnitState state)) return;
+            if (_busy)
+            {
+                DamagePopupService.ShowInfo(unit.TopWorld, "Acción en curso…");
+                return;
+            }
 
             if (Selected != null && Selected != unit) Selected.SetStatusTag("");
             Selected = unit;
@@ -183,7 +196,7 @@ namespace HoloTable.Games.Warhammer
         public void Advance()
         {
             if (Selected == null || _busy || !_units.TryGetValue(Selected, out UnitState state) || state.Mode == MovementMode.Advance) return;
-            StartCoroutine(AdvanceRoutine(Selected, state));
+            StartCoroutine(Guarded(AdvanceRoutine(Selected, state)));
         }
 
         public void CycleWeapon()
@@ -196,9 +209,26 @@ namespace HoloTable.Games.Warhammer
 
         public void Shoot()
         {
-            if (_busy || Selected == null || Target == null || !Target.IsAlive) return;
+            if (Selected == null) return;
+            if (_busy)
+            {
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Acción en curso…");
+                return;
+            }
+
+            if (Target == null || !Target.IsTargetable)
+            {
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Sin objetivo: mira a una unidad enemiga");
+                return;
+            }
+
             if (!_units.TryGetValue(Selected, out UnitState attacker) || !_units.TryGetValue(Target, out UnitState defender)) return;
-            if (attacker.Sheet.Weapons.Count == 0) return;
+            if (attacker.Sheet.Weapons.Count == 0)
+            {
+                Debug.LogWarning($"[HoloTable] Datasheet '{attacker.Sheet.name}' has no weapons.", attacker.Sheet);
+                DamagePopupService.ShowInfo(Selected.TopWorld, "Sin armas en la hoja de datos");
+                return;
+            }
 
             WeaponData weapon = attacker.Sheet.Weapons[attacker.WeaponIndex];
             WeaponProfile profile = weapon.Profile;
@@ -216,7 +246,9 @@ namespace HoloTable.Games.Warhammer
                 return;
             }
 
-            StartCoroutine(AttackSequence(Selected, Target, weapon, defender.Sheet.Unit, TargetVisibility == Visibility.PartialCover));
+            // Benefit of Cover only applies against ranged attacks.
+            bool inCover = TargetVisibility == Visibility.PartialCover && !profile.IsMelee;
+            StartCoroutine(Guarded(AttackSequence(Selected, Target, weapon, defender.Sheet.Unit, inCover)));
         }
 
         // ─────────────────────────────── Frame loop ───────────────────────────────
@@ -297,10 +329,16 @@ namespace HoloTable.Games.Warhammer
             bool exceeded = remaining < -0.05f;
 
             Color color = exceeded ? exceededColor : state.Mode == MovementMode.Advance ? advanceColor : moveColor;
+            float radius = MovementRules.RingRadiusMeters(unit, state.Mode, state.Mode == MovementMode.Advance ? state.AdvanceRoll : 0);
+
+            // Only format a new label when the displayed tenth of an inch changes (no per-frame garbage).
+            int key = (Mathf.RoundToInt(remaining * 10f) * 31 + Mathf.RoundToInt(allowed)) * 2 + (exceeded ? 1 : 0);
+            if (!forceShow && movementVisualizer.IsVisible && key == _lastMoveLabelKey) return;
+            _lastMoveLabelKey = key;
+
             string text = exceeded
                 ? $"¡Excedido {-remaining:0.0}\"!"
                 : $"{remaining:0.0}\" / {allowed:0}\"";
-            float radius = MovementRules.RingRadiusMeters(unit, state.Mode, state.Mode == MovementMode.Advance ? state.AdvanceRoll : 0);
 
             if (forceShow || !movementVisualizer.IsVisible) movementVisualizer.ShowAt(state.MoveOrigin, radius, color, text);
             else movementVisualizer.UpdateRange(radius, color, text);
@@ -313,6 +351,9 @@ namespace HoloTable.Games.Warhammer
             WeaponProfile weapon = state.Sheet.Weapons[state.WeaponIndex].Profile;
             float inches = TableUnits.MetersToInches(TableDistanceEdgeToEdge(Selected, Target));
             bool inRange = inches <= weapon.RangeInches;
+            int key = ((int)TargetVisibility * 2 + (inRange ? 1 : 0)) * 100000 + Mathf.RoundToInt(inches * 10f);
+            if (key == _lastTargetTagKey) return;
+            _lastTargetTagKey = key;
             string los = TargetVisibility == Visibility.Clear ? "Visible"
                 : TargetVisibility == Visibility.PartialCover ? "Cobertura +1"
                 : "Sin LoS";
@@ -328,24 +369,21 @@ namespace HoloTable.Games.Warhammer
 
         private IEnumerator AdvanceRoutine(LivingEntityController unit, UnitState state)
         {
-            _busy = true;
             var roll = new DiceResult();
             yield return RollDice(1, "Avance", null, roll);
             state.Mode = MovementMode.Advance;
             state.AdvanceRoll = roll.Values.Count > 0 ? Mathf.Clamp(roll.Values[0], 1, 6) : 1;
-            DamagePopupService.ShowInfo(unit.TopWorld, $"Avance +{state.AdvanceRoll}\"");
-            _busy = false;
+            if (unit != null) DamagePopupService.ShowInfo(unit.TopWorld, $"Avance +{state.AdvanceRoll}\"");
         }
 
         private IEnumerator AttackSequence(LivingEntityController shooter, LivingEntityController target, WeaponData weapon, UnitProfile targetProfile, bool inCover)
         {
-            _busy = true;
             WeaponProfile w = weapon.Profile;
 
             var hitRolls = new DiceResult();
             yield return RollDice(w.Attacks, $"Impactar {w.Skill}+", r => WoundRules.RollSucceeds(r, w.Skill), hitRolls);
             DicePhaseResult hits = AttackResolver.ResolveHits(hitRolls.Values, w.Skill);
-            DamagePopupService.ShowInfo(shooter.TopWorld, $"{hits.Successes} impactos");
+            DamagePopupService.ShowInfo(SafeTop(shooter), $"{hits.Successes} impactos");
 
             int woundTarget = WoundRules.RequiredWoundRoll(w.Strength, targetProfile.Toughness);
             var woundRolls = new DiceResult();
@@ -376,7 +414,7 @@ namespace HoloTable.Games.Warhammer
             int damage = AttackResolver.Damage(saves.Failures, w.Damage);
             var summary = new AttackSummary(hits, wounds, saves, saves.Failures, damage);
 
-            DamagePopupService.ShowText(shooter.TopWorld + TableSpace.Current.Normal * 0.03f,
+            DamagePopupService.ShowText(SafeTop(shooter) + TableSpace.Current.Normal * 0.03f,
                 $"{hits.Successes} impactos → {wounds.Successes} heridas → {saves.Failures} fallos", Color.white, 0.7f);
 
             if (target != null && target.IsAlive)
@@ -397,7 +435,10 @@ namespace HoloTable.Games.Warhammer
                         Tint = shotColor,
                         OnResolved = _ => done = true,
                     });
-                    while (!done) yield return null;
+
+                    float deadline = Time.time + 15f;
+                    while (!done && Time.time < deadline) yield return null;
+                    if (!done) Debug.LogWarning("[HoloTable] Warhammer attack was not resolved by ARCombatManager within 15s.", this);
                 }
                 else if (damage > 0)
                 {
@@ -410,7 +451,6 @@ namespace HoloTable.Games.Warhammer
             }
 
             AttackResolved?.Invoke(shooter, target, summary);
-            _busy = false;
         }
 
         private IEnumerator RollDice(int count, string prompt, Func<int, bool> isSuccess, DiceResult result)
@@ -424,12 +464,25 @@ namespace HoloTable.Games.Warhammer
             if (usePhysicalDice && diceTray != null
                 && diceTray.RequestRoll(count, prompt, isSuccess, values => result.Values = values, autoThrowDice))
             {
-                while (result.Values == null) yield return null;
-                yield break;
+                float deadline = Time.time + diceThrowTimeout;
+                while (result.Values == null && Time.time < deadline) yield return null;
+
+                if (result.Values == null && diceTray.IsAwaitingThrow)
+                {
+                    // Nobody threw (no hand tracking / swipe adapter?): throw for the player.
+                    DamagePopupService.ShowInfo(diceTray.PickupPoint, "Lanzamiento automático");
+                    diceTray.AutoThrow();
+                }
+
+                deadline = Time.time + 12f;
+                while (result.Values == null && Time.time < deadline) yield return null;
+                if (result.Values != null) yield break;
+
+                Debug.LogWarning("[HoloTable] Physical dice never settled; using virtual dice. Check the DiceTray surface/colliders.", diceTray);
             }
 
             result.Values = _fallbackDice.RollD6(count);
-            DamagePopupService.ShowInfo(Selected != null ? Selected.TopWorld : Vector3.zero, $"{prompt}: {string.Join(" ", result.Values)}");
+            DamagePopupService.ShowInfo(SafeTop(Selected), $"{prompt}: {string.Join(" ", result.Values)}");
             yield return new WaitForSeconds(0.6f);
         }
 
@@ -437,11 +490,44 @@ namespace HoloTable.Games.Warhammer
 
         private void ClearTarget()
         {
+            _lastTargetTagKey = int.MinValue;
             if (Target != null) Target.SetStatusTag("");
             Target = null;
             TargetVisibility = Visibility.Blocked;
             laser.Hide();
         }
+
+        /// <summary>Runs a command sequence and always releases the busy lock, even on exceptions.</summary>
+        private IEnumerator Guarded(IEnumerator body)
+        {
+            _busy = true;
+            try
+            {
+                while (true)
+                {
+                    object current;
+                    try
+                    {
+                        if (!body.MoveNext()) break;
+                        current = body.Current;
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogException(e, this);
+                        break;
+                    }
+
+                    yield return current;
+                }
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+
+        private static Vector3 SafeTop(LivingEntityController e) =>
+            e != null ? e.TopWorld : TableSpace.Current.Origin + TableSpace.Current.Normal * 0.15f;
 
         private void RefreshWeaponLabel(LivingEntityController unit)
         {

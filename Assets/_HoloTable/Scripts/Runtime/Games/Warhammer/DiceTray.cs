@@ -42,11 +42,15 @@ namespace HoloTable.Games.Warhammer
         [SerializeField] private Color successColor = new Color(0.3f, 1f, 0.4f);
         [SerializeField] private Color failColor = new Color(1f, 0.25f, 0.2f);
         [SerializeField, Min(0f)] private float showResultsSeconds = 2.2f;
+        [Tooltip("A die landing cocked is re-rolled at most this many times, then its closest face counts.")]
+        [SerializeField, Range(0, 5)] private int maxCockedRerolls = 3;
 
         private readonly List<ARDie> _pool = new List<ARDie>();
         private readonly List<ARDie> _active = new List<ARDie>();
         private Request _request;
         private Transform _surface;
+        private int _rollSerial;
+        private bool _warnedFall;
 
         public bool IsAwaitingThrow { get; private set; }
         public bool IsRolling { get; private set; }
@@ -90,7 +94,13 @@ namespace HoloTable.Games.Warhammer
             }
 
             _request = new Request { Count = Mathf.Min(count, maxDice), Prompt = prompt, IsSuccess = isSuccess, OnComplete = onComplete };
-            for (int i = 0; i < _request.Count; i++) _active.Add(GetDie());
+            _rollSerial++;
+            for (int i = 0; i < _request.Count; i++)
+            {
+                ARDie die = GetDie();
+                die.RerollCount = 0;
+                _active.Add(die);
+            }
 
             IsAwaitingThrow = true;
             HoldAt(PickupPoint, Quaternion.identity);
@@ -148,17 +158,33 @@ namespace HoloTable.Games.Warhammer
 
         private void OnDieSettled(ARDie die)
         {
-            if (die.IsCocked)
+            TableSpace table = TableSpace.Current;
+            if (table.HeightAbove(die.transform.position) < -0.1f)
             {
-                // Cocked dice are re-rolled, as on a real table.
-                DamagePopupService.ShowInfo(die.transform.position + TableSpace.Current.Normal * 0.03f, "¡Dado montado!");
-                die.Throw(TableSpace.Current.Normal * 0.6f, UnityEngine.Random.insideUnitSphere * 20f);
+                // Fell through / off the table: there is no surface collider where it landed.
+                if (!_warnedFall)
+                {
+                    _warnedFall = true;
+                    Debug.LogWarning("[HoloTable] A die fell below the table. Enable 'Build Physics Surface' or align the TableSpace to the real table.", this);
+                }
+
+                die.Hold(PickupPoint, Quaternion.identity);
+                die.Throw(table.Normal * 0.3f, UnityEngine.Random.insideUnitSphere * 20f);
+                return;
+            }
+
+            if (die.IsCocked && die.RerollCount < maxCockedRerolls)
+            {
+                // Cocked dice are re-rolled, as on a real table (bounded, so it can't loop forever).
+                die.RerollCount++;
+                DamagePopupService.ShowInfo(die.transform.position + table.Normal * 0.03f, "¡Dado montado!");
+                die.Throw(table.Normal * 0.6f, UnityEngine.Random.insideUnitSphere * 20f);
                 return;
             }
 
             foreach (ARDie d in _active)
             {
-                if (d.IsRolling || d.IsCocked) return;
+                if (d.IsRolling || (d.IsCocked && d.RerollCount < maxCockedRerolls)) return;
             }
 
             StartCoroutine(FinishRoll());
@@ -167,11 +193,13 @@ namespace HoloTable.Games.Warhammer
         private IEnumerator FinishRoll()
         {
             IsRolling = false;
+            int serial = _rollSerial;
             var results = new int[_active.Count];
             for (int i = 0; i < _active.Count; i++)
             {
                 ARDie die = _active[i];
                 die.Settled -= OnDieSettled;
+                die.RefreshResult(); // the face the player sees now, after any late knock-over
                 results[i] = die.Result;
                 bool ok = _request?.IsSuccess == null || _request.IsSuccess(die.Result);
                 die.Highlight(ok ? successColor : failColor, 1f);
@@ -183,7 +211,8 @@ namespace HoloTable.Games.Warhammer
             request?.OnComplete?.Invoke(results);
 
             yield return new WaitForSeconds(showResultsSeconds);
-            if (!IsAwaitingThrow && !IsRolling) ClearDice();
+            // Only clear if no newer roll has started meanwhile.
+            if (serial == _rollSerial && !IsAwaitingThrow && !IsRolling) ClearDice();
         }
 
         private ARDie GetDie()

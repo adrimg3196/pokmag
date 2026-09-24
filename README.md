@@ -5,7 +5,8 @@ Plataforma de mesa holográfica en **Unity** (AR Foundation · Vuforia · Meta Q
 al ponerlas sobre la mesa, al estilo de los duelos de Yu-Gi-Oh.
 
 - **Reglas reales, testeadas.** Evolución, debilidad/resistencia, coste de energía, *first strike*, *trample*,
-  *deathtouch*, tabla F vs R, salvaciones con FP/cobertura/invulnerable… viven en un dominio C# puro con **75 tests xUnit**.
+  *deathtouch*, *lifelink* de ambos lados, tabla F vs R, salvaciones con FP/cobertura (solo a distancia)/invulnerable…
+  viven en un dominio C# puro con **132 tests xUnit** (incluye casos límite verificados contra las reglas oficiales).
 - **Independiente del SDK.** Un director central recibe «carta vista / carta perdida» de cualquier tracker
   (Vuforia, AR Foundation, QR en Quest, visión por computador propia) y sincroniza Spawn/Die sin parpadeos.
 - **Datos, no código.** Una carta nueva es un `ScriptableObject` y una imagen de referencia.
@@ -24,6 +25,21 @@ Entregables de documentación:
 
 - [`Docs/SETUP_TRACKING.md`](Docs/SETUP_TRACKING.md) — OnTargetFound/OnTargetLost en **Vuforia**, **AR Foundation** y **Quest 3**, línea temporal Spawn/Die, Animator Controller y shader.
 - [`Docs/FOLDER_STRUCTURE.md`](Docs/FOLDER_STRUCTURE.md) — estructura de carpetas y convenciones para Pokémon / MTG / Warhammer.
+
+## Desarrollado con ECC (everything-claude-code)
+
+El proyecto aplica y trae integrado [ECC](https://github.com/affaan-m/ecc) en `.claude/`:
+
+| Pieza de ECC | Cómo se usa aquí |
+|---|---|
+| `hexagonal-architecture` | Dominio puro ↔ puertos (`IGameRuleModule`, `IRandomSource`, `ReportFound/Lost`) ↔ adaptadores por SDK |
+| `tdd-workflow` + `csharp-testing` | Cada bug de reglas encontrado se reprodujo primero con un test en rojo (MTG *reminder text*, cobertura en melee, 0 daño con debilidad, *lifelink* del bloqueador) |
+| Agentes `csharp-reviewer`, `silent-failure-hunter`, `performance-optimizer`, `pr-test-analyzer` | Revisión adversarial en paralelo; ~50 hallazgos verificados y corregidos (bloqueos de `_busy`, hechizos colgados, VFX sin pool, GC por frame, fugas de materiales, fallos silenciosos de configuración) |
+| *santa-loop* (doble revisión hasta converger) | Tras corregir, una segunda ronda de revisión independiente valida el diff |
+| `verification-loop` + hooks de `rules/csharp` | Hook `PostToolUse` (`.claude/hooks/verify-csharp.sh`): tras editar un `.cs` compila todos los scripts y, si es dominio, pasa los tests |
+| Skill propia `holotable-unity` | Recetas para añadir cartas, reglas, juegos nuevos o adaptadores de SDK sin romper nada |
+
+Licencia MIT de ECC en [`.claude/THIRD_PARTY_NOTICES.md`](.claude/THIRD_PARTY_NOTICES.md).
 
 ## Arquitectura (puertos y adaptadores)
 
@@ -67,7 +83,7 @@ flowchart LR
 
 ## Puesta en marcha
 
-Requisitos: Unity 2022.3 LTS o Unity 6 · URP · TextMeshPro · uno de: AR Foundation 5/6, Vuforia 10+ · opcional XR Hands, Input System.
+Requisitos: Unity 2021.3.18+ (recomendado 2022.3 LTS o Unity 6) · URP · TextMeshPro · uno de: AR Foundation 5/6, Vuforia 10+ · opcional XR Hands, Input System.
 
 1. Copia `Assets/_HoloTable` a tu proyecto (Unity generará los `.meta`).
 2. Escena: `XR Origin` (o `ARCamera` de Vuforia) y un GameObject **HoloTable** con:
@@ -85,7 +101,7 @@ Comandos útiles (todos públicos y sin parámetros para botones XR / UnityEvent
 ## Verificación sin Unity
 
 ```bash
-dotnet test  Tests/HoloTable.Domain.Tests     # 75 tests de reglas (C# 9, como Unity)
+dotnet test  Tests/HoloTable.Domain.Tests     # 132 tests de reglas (C# 9, como Unity)
 dotnet build Tools/UnityCompileCheck          # compila TODOS los scripts contra UnityEngine 2021.3 (NuGet)
 ```
 

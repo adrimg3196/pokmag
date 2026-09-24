@@ -6,6 +6,7 @@ using HoloTable.Domain;
 using HoloTable.Domain.Combat;
 using HoloTable.Domain.Warhammer;
 using HoloTable.Entities;
+using HoloTable.VFX;
 using UnityEngine;
 using UnityEngine.Pool;
 
@@ -41,6 +42,7 @@ namespace HoloTable.Combat
         [SerializeField, Min(1)] private int maxConcurrentAttacks = 3;
         [SerializeField, Min(0f)] private float hitReactionPause = 0.35f;
         [SerializeField, Min(0.5f)] private float stageTimeout = 4f;
+        [SerializeField, Range(0, 16)] private int prewarmCount = 4;
 
         [Header("Demo mode")]
         [Tooltip("Engaged rivals fight automatically using their ATK stat. Leave off when game modules drive combat.")]
@@ -55,6 +57,8 @@ namespace HoloTable.Combat
         private readonly HashSet<int> _busyAttackers = new HashSet<int>();
         private readonly Dictionary<int, float> _autoBattleReady = new Dictionary<int, float>();
         private readonly Dictionary<HoloProjectile, ObjectPool<HoloProjectile>> _pools = new Dictionary<HoloProjectile, ObjectPool<HoloProjectile>>();
+        private readonly HashSet<AttackRequest> _inFlight = new HashSet<AttackRequest>();
+        private Predicate<Engagement> _endedPredicate;
 
         private float _nextScan;
         private int _running;
@@ -72,11 +76,40 @@ namespace HoloTable.Combat
         {
             if (Instance != null && Instance != this)
             {
+                Debug.LogWarning("[HoloTable] Duplicate ARCombatManager destroyed.", this);
                 Destroy(this);
                 return;
             }
 
             Instance = this;
+            _endedPredicate = RemoveIfEnded;
+
+            if (defaultProjectile != null)
+            {
+                ObjectPool<HoloProjectile> pool = GetPool(defaultProjectile);
+                var warm = new List<HoloProjectile>(prewarmCount);
+                for (int i = 0; i < prewarmCount; i++) warm.Add(pool.Get());
+                foreach (HoloProjectile p in warm) pool.Release(p);
+            }
+
+            VfxPool.Prewarm(defaultImpactVfx, prewarmCount);
+        }
+
+        private void OnDisable()
+        {
+            // Coroutines die with the component: never leave a caller waiting on OnResolved.
+            int dropped = _queue.Count + _inFlight.Count;
+            foreach (AttackRequest r in new List<AttackRequest>(_inFlight)) Complete(r, new AttackReport(r.Attacker, r.Defender, 0, false, false, Vector3.zero));
+            while (_queue.Count > 0)
+            {
+                AttackRequest r = _queue.Dequeue();
+                Complete(r, new AttackReport(r.Attacker, r.Defender, 0, false, false, Vector3.zero));
+            }
+
+            _inFlight.Clear();
+            _busyAttackers.Clear();
+            _running = 0;
+            if (dropped > 0) Debug.LogWarning($"[HoloTable] ARCombatManager disabled with {dropped} attack(s) pending; resolved as missed.", this);
         }
 
         private void OnDestroy()
@@ -129,7 +162,7 @@ namespace HoloTable.Combat
             {
                 if (!e.Involves(entity.EntityId)) continue;
                 LivingEntityController other = EntityRegistry.Find(e.FirstId == entity.EntityId ? e.SecondId : e.FirstId);
-                if (other != null && other.IsAlive) return other;
+                if (other != null && other.IsTargetable) return other;
             }
 
             return null;
@@ -143,7 +176,7 @@ namespace HoloTable.Combat
             _combatants.Clear();
             foreach (LivingEntityController e in EntityRegistry.All)
             {
-                if (!e.IsAlive || e.State == EntityState.Dormant) continue;
+                if (!e.IsTargetable) continue;
                 _combatants.Add(new Combatant(e.EntityId, e.Side, table.ToTable2D(PhysicalPosition(e)), EngagementRadius(e)));
             }
 
@@ -161,14 +194,16 @@ namespace HoloTable.Combat
                 }
             }
 
-            _engaged.RemoveWhere(e =>
-            {
-                if (_stillEngaged.Contains(e)) return false;
-                EngagementEnded?.Invoke(EntityRegistry.Find(e.FirstId), EntityRegistry.Find(e.SecondId));
-                return true;
-            });
+            _engaged.RemoveWhere(_endedPredicate);
 
             if (autoBattleOnEngagement) DriveAutoBattle();
+        }
+
+        private bool RemoveIfEnded(Engagement e)
+        {
+            if (_stillEngaged.Contains(e)) return false;
+            EngagementEnded?.Invoke(EntityRegistry.Find(e.FirstId), EntityRegistry.Find(e.SecondId));
+            return true;
         }
 
         private float EngagementRadius(LivingEntityController e)
@@ -190,7 +225,7 @@ namespace HoloTable.Combat
 
         private void TryAutoAttack(LivingEntityController attacker, LivingEntityController defender)
         {
-            if (attacker == null || defender == null || !attacker.CanAct || !defender.IsAlive) return;
+            if (attacker == null || defender == null || !attacker.CanAct || !defender.IsTargetable) return;
             if (_busyAttackers.Contains(attacker.EntityId)) return;
             if (_autoBattleReady.TryGetValue(attacker.EntityId, out float ready) && Time.time < ready) return;
 
@@ -208,73 +243,106 @@ namespace HoloTable.Combat
         private IEnumerator RunAttack(AttackRequest r)
         {
             _running++;
+            _inFlight.Add(r);
             LivingEntityController attacker = r.Attacker;
             LivingEntityController defender = r.Defender;
-            if (attacker != null) _busyAttackers.Add(attacker.EntityId);
+            int attackerId = attacker != null ? attacker.EntityId : 0;
+            if (attacker != null) _busyAttackers.Add(attackerId);
 
-            Vector3 fallbackPoint = r.TargetPointOverride ?? (defender != null ? defender.CenterWorld : Vector3.zero);
-            Vector3 TargetPoint() => defender != null && defender.IsAlive ? defender.CenterWorld : fallbackPoint;
-
-            // 1. Attacker animation up to the impact frame.
-            if (attacker != null && attacker.IsAlive && !r.SkipAttackAnimation)
+            try
             {
-                bool impact = false;
-                attacker.PlayAttack(TargetPoint(), () => impact = true);
-                float deadline = Time.time + stageTimeout;
-                while (!impact && attacker != null && Time.time < deadline) yield return null;
-            }
+                Vector3 fallbackPoint = r.TargetPointOverride ?? (defender != null ? defender.CenterWorld : Vector3.zero);
+                Vector3 TargetPoint() => defender != null && defender.IsAlive ? defender.CenterWorld : fallbackPoint;
 
-            // 2. Melee contact or homing projectile.
-            bool melee = !r.ForceRanged && (r.ForceMelee
-                || (attacker != null && defender != null && TableDistance(attacker, defender) <= meleeRange));
-
-            Vector3 impactPoint = TargetPoint();
-            if (melee)
-            {
-                if (attacker != null && defender != null)
+                // 1. Attacker animation up to the impact frame.
+                if (attacker != null && attacker.IsAlive && !r.SkipAttackAnimation)
                 {
-                    Vector3 dir = (attacker.CenterWorld - defender.CenterWorld).normalized;
-                    impactPoint = defender.CenterWorld + dir * (defender.WorldFootprint * 0.5f);
-                }
-            }
-            else
-            {
-                Vector3 origin = r.OriginOverride ?? (attacker != null ? attacker.MuzzleWorld : TargetPoint() + TableSpace.Current.Normal * 0.4f);
-                HoloProjectile prefab = r.Projectile != null ? r.Projectile : defaultProjectile;
-
-                if (prefab != null)
-                {
-                    bool arrived = false;
-                    ObjectPool<HoloProjectile> pool = GetPool(prefab);
-                    HoloProjectile projectile = pool.Get();
-                    projectile.Launch(origin, TargetPoint, r.Tint, p => { arrived = true; impactPoint = p; }, pool.Release);
-
+                    bool impact = false;
+                    attacker.PlayAttack(TargetPoint(), () => impact = true);
                     float deadline = Time.time + stageTimeout;
-                    while (!arrived && Time.time < deadline) yield return null;
+                    while (!impact && attacker != null && Time.time < deadline) yield return null;
+                    if (!impact && attacker != null)
+                    {
+                        Debug.LogWarning($"[HoloTable] {attacker.name}: attack impact not signalled within {stageTimeout}s (missing AnimEvent_AttackImpact?). Continuing.", attacker);
+                    }
+                }
+
+                // 2. Melee contact or homing projectile.
+                bool melee = !r.ForceRanged && (r.ForceMelee
+                    || (attacker != null && defender != null && TableDistance(attacker, defender) <= meleeRange));
+
+                Vector3 impactPoint = TargetPoint();
+                if (melee)
+                {
+                    if (attacker != null && defender != null)
+                    {
+                        Vector3 dir = (attacker.CenterWorld - defender.CenterWorld).normalized;
+                        impactPoint = defender.CenterWorld + dir * (defender.WorldFootprint * 0.5f);
+                    }
                 }
                 else
                 {
-                    yield return new WaitForSeconds(Vector3.Distance(origin, TargetPoint()) / 1.2f);
-                    impactPoint = TargetPoint();
+                    Vector3 origin = r.OriginOverride ?? (attacker != null ? attacker.MuzzleWorld : TargetPoint() + TableSpace.Current.Normal * 0.4f);
+                    HoloProjectile prefab = r.Projectile != null ? r.Projectile : defaultProjectile;
+
+                    if (prefab != null)
+                    {
+                        bool arrived = false;
+                        ObjectPool<HoloProjectile> pool = GetPool(prefab);
+                        HoloProjectile projectile = pool.Get();
+                        projectile.Launch(origin, TargetPoint, r.Tint, p => { arrived = true; impactPoint = p; }, pool.Release);
+
+                        float deadline = Time.time + stageTimeout;
+                        while (!arrived && Time.time < deadline) yield return null;
+                        if (!arrived)
+                        {
+                            Debug.LogWarning($"[HoloTable] Projectile '{prefab.name}' did not arrive within {stageTimeout}s (speed too low?). Applying hit now.", this);
+                            impactPoint = TargetPoint();
+                        }
+                    }
+                    else
+                    {
+                        yield return new WaitForSeconds(Vector3.Distance(origin, TargetPoint()) / 1.2f);
+                        impactPoint = TargetPoint();
+                    }
                 }
+
+                // 3. Impact: VFX, SFX, damage & hit reaction.
+                ParticleSystem impactVfx = r.ImpactVfx != null ? r.ImpactVfx : defaultImpactVfx;
+                VfxPool.Play(impactVfx, impactPoint, Quaternion.LookRotation(TableSpace.Current.Normal), 1f, r.Tint);
+                if (impactSfx != null) AudioSource.PlayClipAtPoint(impactSfx, impactPoint, 0.8f);
+
+                bool landed = defender != null && defender.IsAlive;
+                if (landed) defender.ApplyDamage(r.Damage, impactPoint, r.Label);
+                bool defeated = landed && !defender.IsAlive;
+
+                if (hitReactionPause > 0f) yield return new WaitForSeconds(hitReactionPause);
+
+                Complete(r, new AttackReport(attacker, defender, r.Damage, landed || defender == null, defeated, impactPoint));
             }
+            finally
+            {
+                _inFlight.Remove(r);
+                if (attackerId != 0) _busyAttackers.Remove(attackerId);
+                _running = Mathf.Max(0, _running - 1);
+                if (!r.Completed) Complete(r, new AttackReport(attacker, defender, 0, false, false, Vector3.zero));
+            }
+        }
 
-            // 3. Impact: VFX, SFX, damage & hit reaction.
-            SpawnImpact(r.ImpactVfx != null ? r.ImpactVfx : defaultImpactVfx, impactPoint, r.Tint);
-            if (impactSfx != null) AudioSource.PlayClipAtPoint(impactSfx, impactPoint, 0.8f);
+        private void Complete(AttackRequest r, AttackReport report)
+        {
+            if (r.Completed) return;
+            r.Completed = true;
 
-            bool landed = defender != null && defender.IsAlive;
-            if (landed) defender.ApplyDamage(r.Damage, impactPoint, r.Label);
-            bool defeated = landed && !defender.IsAlive;
-
-            if (hitReactionPause > 0f) yield return new WaitForSeconds(hitReactionPause);
-
-            var report = new AttackReport(attacker, defender, r.Damage, landed || defender == null, defeated, impactPoint);
-            r.OnResolved?.Invoke(report);
-            AttackResolved?.Invoke(report);
-
-            if (attacker != null) _busyAttackers.Remove(attacker.EntityId);
-            _running--;
+            try
+            {
+                r.OnResolved?.Invoke(report);
+                AttackResolved?.Invoke(report);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e, this);
+            }
         }
 
         // ─────────────────────────────── Helpers ───────────────────────────────
@@ -299,16 +367,6 @@ namespace HoloTable.Combat
                 maxSize: 32);
             _pools.Add(prefab, pool);
             return pool;
-        }
-
-        private static void SpawnImpact(ParticleSystem prefab, Vector3 point, Color tint)
-        {
-            if (prefab == null) return;
-            ParticleSystem fx = Instantiate(prefab, point, Quaternion.LookRotation(TableSpace.Current.Normal));
-            ParticleSystem.MainModule main = fx.main;
-            main.startColor = tint;
-            fx.Play(true);
-            Destroy(fx.gameObject, main.duration + main.startLifetime.constantMax + 0.25f);
         }
     }
 }

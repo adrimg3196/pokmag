@@ -34,6 +34,9 @@ namespace HoloTable.Games.MTG
             public bool SummoningSick;
             public float EnteredAt;
             public bool Attacking;
+
+            /// <summary>Incremented on every tap/untap so a stale attack routine can detect it was cancelled.</summary>
+            public int AttackToken;
         }
 
         [Header("Tapping")]
@@ -163,7 +166,7 @@ namespace HoloTable.Games.MTG
         {
             TableSpace table = TableSpace.Current;
             _snapshot.Clear();
-            _snapshot.AddRange(_permanents.Keys);
+            foreach (LivingEntityController key in _permanents.Keys) _snapshot.Add(key); // AddRange(Keys) allocates on Mono
 
             foreach (LivingEntityController entity in _snapshot)
             {
@@ -197,8 +200,7 @@ namespace HoloTable.Games.MTG
                 entity.SetStatusTag("HABILIDAD ACTIVADA", abilityColor);
                 if (abilityVfx != null)
                 {
-                    ParticleSystem fx = Instantiate(abilityVfx, entity.CenterWorld, Quaternion.identity);
-                    Destroy(fx.gameObject, 3f);
+                    VfxPool.Play(abilityVfx, entity.CenterWorld, Quaternion.identity);
                 }
 
                 AbilityActivated?.Invoke(entity);
@@ -215,28 +217,30 @@ namespace HoloTable.Games.MTG
             entity.SetStatusTag("ATACANTE", attackerColor);
             Vector3 opponentEdge = TableSpace.Current.PlayerEdge(entity.Side.Opponent());
             entity.PlayAttack(opponentEdge, null); // war-cry lunge towards the defending player
-            StartCoroutine(ResolveAttackRoutine(entity, state));
+            state.AttackToken++;
+            StartCoroutine(ResolveAttackRoutine(entity, state, state.AttackToken));
         }
 
         private void OnUntapped(LivingEntityController entity, PermanentState state)
         {
             state.Attacking = false;
+            state.AttackToken++; // cancels a pending block window
             RefreshTag(entity, state);
             CreatureUntapped?.Invoke(entity);
         }
 
         // ─────────────────────────────── Combat resolution ───────────────────────────────
 
-        private IEnumerator ResolveAttackRoutine(LivingEntityController attacker, PermanentState state)
+        private IEnumerator ResolveAttackRoutine(LivingEntityController attacker, PermanentState state, int token)
         {
             DamagePopupService.ShowInfo(attacker.TopWorld, blockWindowSeconds > 0f ? $"¡Ataque! Bloquea en {blockWindowSeconds:0}s" : "¡Ataque!");
             if (blockWindowSeconds > 0f) yield return new WaitForSeconds(blockWindowSeconds);
-            if (attacker == null || !attacker.IsAlive || !state.Attacking) yield break;
+            if (attacker == null || !attacker.IsAlive || !state.Attacking || state.AttackToken != token) yield break;
 
             var attackerCard = (MtgCardDefinition)attacker.Definition;
             LivingEntityController blocker = FindPhysicalBlocker(attacker, attackerCard) ?? (autoBlock ? FindAutoBlocker(attacker, attackerCard) : null);
-            MtgCreature attackerCreature = attackerCard.Creature;
-            MtgCreature blockerCreature = blocker != null ? ((MtgCardDefinition)blocker.Definition).Creature : null;
+            MtgCreature attackerCreature = LiveCreature(attacker);
+            MtgCreature blockerCreature = blocker != null ? LiveCreature(blocker) : null;
 
             MtgCombatOutcome outcome = MtgCombatRules.Resolve(
                 attackerCreature,
@@ -251,6 +255,11 @@ namespace HoloTable.Games.MTG
             if (outcome.LifeGainedByAttacker > 0)
             {
                 ChangeLife(attacker.Side, outcome.LifeGainedByAttacker, TableSpace.Current.PlayerEdge(attacker.Side));
+            }
+
+            if (outcome.LifeGainedByDefender > 0)
+            {
+                ChangeLife(defending, outcome.LifeGainedByDefender, TableSpace.Current.PlayerEdge(defending));
             }
 
             if (!outcome.Blocked)
@@ -337,10 +346,12 @@ namespace HoloTable.Games.MTG
             {
                 if (!IsLegalBlocker(attacker, attackerCard, pair.Key, pair.Value)) continue;
                 candidates.Add(pair.Key);
-                creatures.Add(((MtgCardDefinition)pair.Key.Definition).Creature);
+                // Score candidates with the toughness they have left this turn.
+                MtgCreature live = LiveCreature(pair.Key);
+                creatures.Add(live with { Toughness = pair.Key.Vitals.Current });
             }
 
-            int index = MtgCombatRules.ChooseBestBlocker(attackerCard.Creature, creatures, attacker.Vitals.Missing);
+            int index = MtgCombatRules.ChooseBestBlocker(LiveCreature(attacker), creatures, attacker.Vitals.Missing);
             return index >= 0 ? candidates[index] : null;
         }
 
@@ -353,6 +364,13 @@ namespace HoloTable.Games.MTG
                 && candidate.Definition is MtgCardDefinition card
                 && card.IsCreature
                 && MtgCombatRules.CanBlock(attackerCard.Creature, card.Creature);
+        }
+
+        /// <summary>Combat stats as they are now (buffs, -X/-X), not as printed.</summary>
+        private static MtgCreature LiveCreature(LivingEntityController entity)
+        {
+            var card = (MtgCardDefinition)entity.Definition;
+            return new MtgCreature(card.DisplayName, entity.AttackValue, entity.Vitals.Max, card.Keywords);
         }
 
         private void RefreshTag(LivingEntityController entity, PermanentState state)

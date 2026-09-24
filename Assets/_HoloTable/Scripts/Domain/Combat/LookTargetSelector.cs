@@ -1,3 +1,5 @@
+#nullable enable
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -34,6 +36,9 @@ namespace HoloTable.Domain.Combat
             IReadOnlyList<LookCandidate> candidates,
             float awarenessRadius)
         {
+            if (candidates == null) throw new ArgumentNullException(nameof(candidates));
+            if (awarenessRadius < 0f) throw new ArgumentOutOfRangeException(nameof(awarenessRadius));
+
             int bestId = NoTarget;
             float bestSqr = awarenessRadius * awarenessRadius;
 

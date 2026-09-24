@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using HoloTable.Core;
@@ -6,6 +7,7 @@ using HoloTable.Domain;
 using HoloTable.Entities;
 using HoloTable.UI;
 using UnityEngine;
+using Object = UnityEngine.Object;
 
 namespace HoloTable.Tracking
 {
@@ -17,7 +19,9 @@ namespace HoloTable.Tracking
     ///  • debounces flicker (confirm delay on found, grace period on lost),
     ///  • resolves the card in the catalog and lets game modules intercept it,
     ///  • spawns / despawns holograms so Spawn and Die are synced with the physical card,
-    ///  • remembers "spent" cards (KO'd creature still on the table) so they don't respawn.
+    ///  • keeps "orphan" holograms as ghosts for a per-game persistence window so a miniature
+    ///    lifted to be moved, or a card briefly covered, re-attaches with its state intact,
+    ///  • remembers "spent" cards (KO'd creature, cast spell) so re-detection doesn't replay them.
     /// </summary>
     [DefaultExecutionOrder(-100)]
     public sealed class HoloSpawnDirector : MonoBehaviour
@@ -34,12 +38,32 @@ namespace HoloTable.Tracking
             public bool Spent { get; set; }
         }
 
+        private sealed class Orphan
+        {
+            public LivingEntityController Entity;
+            public float ExpiresAt;
+            public Vector3 LastPosition;
+        }
+
         [SerializeField] private CardCatalog catalog;
         [SerializeField] private EntityHUD hudPrefab;
         [Tooltip("Card must be seen continuously this long before its hologram appears (filters false positives).")]
         [SerializeField, Min(0f)] private float foundConfirmDelay = 0.12f;
-        [Tooltip("Card may disappear this long (hand passing over it, glare) before the hologram dies.")]
+        [Tooltip("Card may disappear this long (hand passing over it, glare) before the hologram leaves its card.")]
         [SerializeField, Min(0f)] private float lostGraceSeconds = 0.6f;
+
+        [Header("Persistence after loss (ghost, then re-attach or dissolve)")]
+        [Tooltip("Pokémon: allows swapping in the evolution card and brief occlusions.")]
+        [SerializeField, Min(0f)] private float pokemonPersistence = 2.5f;
+        [Tooltip("MTG: removing a permanent from the battlefield is meaningful, so it dissolves.")]
+        [SerializeField, Min(0f)] private float mtgPersistence;
+        [Tooltip("Warhammer: models are lifted to be moved; keep their wounds while in the air.")]
+        [SerializeField, Min(0f)] private float warhammerPersistence = 20f;
+        [Tooltip("Cards re-attach to their orphan only within this distance (metres). Warhammer ignores it.")]
+        [SerializeField, Min(0.01f)] private float reattachMaxDistance = 0.08f;
+
+        [Tooltip("A spent card (KO'd, cast) re-seen within this window is ignored instead of replayed.")]
+        [SerializeField, Min(0f)] private float spentMemorySeconds = 8f;
         [SerializeField] private bool verboseLogging;
 
         private static readonly List<IGameRuleModule> Modules = new List<IGameRuleModule>();
@@ -47,16 +71,41 @@ namespace HoloTable.Tracking
         private readonly Dictionary<string, TargetEntry> _entries = new Dictionary<string, TargetEntry>();
         private readonly HashSet<LivingEntityController> _entities = new HashSet<LivingEntityController>();
         private readonly Dictionary<LivingEntityController, TargetEntry> _entryByEntity = new Dictionary<LivingEntityController, TargetEntry>();
+        private readonly List<Orphan> _orphans = new List<Orphan>();
+        private readonly Dictionary<string, float> _spentMemory = new Dictionary<string, float>();
+        private readonly HashSet<EntityDefinition> _warnedDefinitions = new HashSet<EntityDefinition>();
 
         public static HoloSpawnDirector Instance { get; private set; }
 
+        private static bool _warnedMissing;
+
+        /// <summary>
+        /// Instance for tracking adapters. Logs once (with the adapter as context) when the scene has no
+        /// director, instead of silently dropping every detection.
+        /// </summary>
+        public static HoloSpawnDirector ForAdapter(Object adapter)
+        {
+            if (Instance == null && !_warnedMissing)
+            {
+                _warnedMissing = true;
+                Debug.LogWarning("[HoloTable] No active HoloSpawnDirector in the scene: tracking events are being dropped.", adapter);
+            }
+
+            return Instance;
+        }
+
         public IReadOnlyCollection<LivingEntityController> ActiveEntities => _entities;
 
-        public System.Action<LivingEntityController> EntitySpawned;
-        public System.Action<LivingEntityController> EntityRemoved;
+        public event Action<LivingEntityController> EntitySpawned;
+        public event Action<LivingEntityController> EntityRemoved;
+        public event Action<LivingEntityController> EntityReattached;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetStatics() => Modules.Clear();
+        private static void ResetStatics()
+        {
+            Modules.Clear();
+            _warnedMissing = false;
+        }
 
         public static void RegisterModule(IGameRuleModule module)
         {
@@ -75,11 +124,34 @@ namespace HoloTable.Tracking
             }
 
             Instance = this;
+            if (catalog == null)
+            {
+                Debug.LogError("[HoloTable] HoloSpawnDirector has no CardCatalog assigned: no card will ever spawn.", this);
+            }
         }
 
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
+        }
+
+        private void Update()
+        {
+            for (int i = _orphans.Count - 1; i >= 0; i--)
+            {
+                Orphan o = _orphans[i];
+                if (o.Entity == null)
+                {
+                    _orphans.RemoveAt(i);
+                    continue;
+                }
+
+                if (Time.time < o.ExpiresAt) continue;
+
+                _orphans.RemoveAt(i);
+                o.Entity.Despawn();
+                Log($"Orphan {o.Entity.name} expired; dissolving.");
+            }
         }
 
         // ─────────────────────────────── Tracking input ───────────────────────────────
@@ -95,13 +167,13 @@ namespace HoloTable.Tracking
                 entry.Target.MarkSeen(anchor, physicalSize);
                 if (!wasLost) return;
 
-                // Re-acquired inside the grace period → cancel the pending death.
+                // Re-acquired inside the grace period → cancel the pending loss.
                 if (entry.PendingRoutine != null && entry.Resolved)
                 {
                     StopCoroutine(entry.PendingRoutine);
                     entry.PendingRoutine = null;
                     if (entry.Entity != null) entry.Entity.Follow(entry.Target);
-                    Log($"'{referenceName}' re-acquired, death cancelled.");
+                    Log($"'{referenceName}' re-acquired, loss cancelled.");
                 }
 
                 return;
@@ -110,16 +182,26 @@ namespace HoloTable.Tracking
             var target = new TrackedTarget(instanceId, referenceName, anchor, physicalSize);
             entry = new TargetEntry(target);
             _entries.Add(instanceId, entry);
+
+            if (_spentMemory.TryGetValue(instanceId, out float until) && Time.time < until)
+            {
+                // Same physical card put straight back (KO'd creature, cast spell): don't replay it.
+                entry.Resolved = true;
+                entry.Spent = true;
+                Log($"'{referenceName}' is spent; ignoring re-detection.");
+                return;
+            }
+
             entry.PendingRoutine = StartCoroutine(ConfirmFoundRoutine(entry));
         }
 
         /// <summary>Tracking degraded (Vuforia LIMITED / ARF Limited). Holograms freeze in place.</summary>
         public void ReportLimited(string instanceId)
         {
-            if (_entries.TryGetValue(instanceId, out TargetEntry entry)) entry.Target.MarkLimited();
+            if (!string.IsNullOrEmpty(instanceId) && _entries.TryGetValue(instanceId, out TargetEntry entry)) entry.Target.MarkLimited();
         }
 
-        /// <summary>Card no longer visible. The hologram dies after the grace period.</summary>
+        /// <summary>Card no longer visible. The hologram leaves its card after the grace period.</summary>
         public void ReportLost(string instanceId)
         {
             if (string.IsNullOrEmpty(instanceId) || !_entries.TryGetValue(instanceId, out TargetEntry entry)) return;
@@ -129,7 +211,7 @@ namespace HoloTable.Tracking
 
             if (!entry.Resolved)
             {
-                // Never confirmed: it was a false positive, forget silently.
+                // Never confirmed: a false positive, forget silently (by design).
                 if (entry.PendingRoutine != null) StopCoroutine(entry.PendingRoutine);
                 _entries.Remove(instanceId);
                 return;
@@ -146,7 +228,8 @@ namespace HoloTable.Tracking
         {
             if (definition == null || definition.Prefab == null)
             {
-                Debug.LogWarning($"[HoloTable] '{definition?.name}' has no hologram prefab.", this);
+                string label = definition != null ? definition.name : "<null>";
+                Debug.LogWarning($"[HoloTable] '{label}' has no hologram prefab; nothing to spawn.", this);
                 return null;
             }
 
@@ -180,15 +263,21 @@ namespace HoloTable.Tracking
         }
 
         /// <summary>
-        /// Unlinks an entity from its card so losing the card no longer kills it
-        /// (evolution: the old card gets covered by the new one).
+        /// Unlinks an entity from its card (or from the orphan list) so the director no longer
+        /// manages its lifetime. Used by evolution: the old card gets covered by the new one.
         /// </summary>
         public void DetachEntity(LivingEntityController entity)
         {
-            if (entity == null || !_entryByEntity.TryGetValue(entity, out TargetEntry entry)) return;
-            _entryByEntity.Remove(entity);
-            entry.Entity = null;
-            entry.Spent = true;
+            if (entity == null) return;
+
+            RemoveOrphan(entity);
+            if (_entryByEntity.TryGetValue(entity, out TargetEntry entry))
+            {
+                _entryByEntity.Remove(entity);
+                entry.Entity = null;
+                entry.Spent = true;
+            }
+
             entity.StopFollowing();
         }
 
@@ -201,6 +290,9 @@ namespace HoloTable.Tracking
 
         public TrackedTarget GetTarget(LivingEntityController entity) =>
             entity != null && _entryByEntity.TryGetValue(entity, out TargetEntry e) ? e.Target : null;
+
+        /// <summary>True while the entity is a ghost waiting for its card to come back.</summary>
+        public bool IsOrphan(LivingEntityController entity) => FindOrphanIndex(entity) >= 0;
 
         public PlayerSide ResolveSide(TrackedTarget target) =>
             target != null && target.HasAnchor ? TableSpace.Current.ResolveSide(target.Anchor.position) : PlayerSide.Neutral;
@@ -216,18 +308,27 @@ namespace HoloTable.Tracking
 
             if (catalog == null || !catalog.TryResolve(entry.Target.ReferenceName, out EntityDefinition definition))
             {
-                Debug.LogWarning($"[HoloTable] No definition for reference image '{entry.Target.ReferenceName}'.", this);
+                if (catalog != null)
+                {
+                    Debug.LogWarning($"[HoloTable] No definition for reference image '{entry.Target.ReferenceName}' in '{catalog.name}'.", this);
+                }
+
                 entry.Spent = true;
                 yield break;
             }
 
             entry.Definition = definition;
             PlayerSide side = ResolveSide(entry.Target);
-            var context = new SpawnContext(definition, entry.Target, side, this);
 
+            if (TryReattachOrphan(entry, definition, side)) yield break;
+
+            var context = new SpawnContext(definition, entry.Target, side, this);
+            bool hasModule = false;
             foreach (IGameRuleModule module in SnapshotModules())
             {
-                if (module.System == definition.System && module.TryInterceptSpawn(context))
+                if (module.System != definition.System) continue;
+                hasModule = true;
+                if (module.TryInterceptSpawn(context))
                 {
                     entry.Spent = entry.Entity == null;
                     Log($"'{definition.DisplayName}' handled by {module.GetType().Name}.");
@@ -238,7 +339,15 @@ namespace HoloTable.Tracking
             if (!definition.SpawnsCreature)
             {
                 entry.Spent = true;
+                WarnOnce(definition, hasModule
+                    ? $"'{definition.DisplayName}' does not spawn a creature (no prefab assigned, or not a creature card)."
+                    : $"'{definition.DisplayName}' ({definition.System}) was ignored: no GameLogic module for {definition.System} in the scene, and it has no creature prefab.");
                 yield break;
+            }
+
+            if (!hasModule)
+            {
+                WarnOnce(definition, $"No GameLogic module for {definition.System} in the scene; '{definition.DisplayName}' spawns without game rules.");
             }
 
             SpawnEntity(definition, entry.Target, side);
@@ -250,16 +359,19 @@ namespace HoloTable.Tracking
 
             entry.PendingRoutine = null;
             _entries.Remove(entry.Target.InstanceId);
+            if (entry.Spent && spentMemorySeconds > 0f)
+            {
+                _spentMemory[entry.Target.InstanceId] = Time.time + spentMemorySeconds;
+            }
 
             LivingEntityController entity = entry.Entity;
             if (entity != null) _entryByEntity.Remove(entity);
 
-            GameSystem? system = entry.Definition != null ? entry.Definition.System : (GameSystem?)null;
-            if (system.HasValue)
+            if (entry.Definition != null)
             {
                 foreach (IGameRuleModule module in SnapshotModules())
                 {
-                    if (module.System == system.Value && module.OnTargetLost(entry.Target, entity))
+                    if (module.System == entry.Definition.System && module.OnTargetLost(entry.Target, entity))
                     {
                         Log($"'{entry.Target.ReferenceName}' lost; entity claimed by {module.GetType().Name}.");
                         yield break;
@@ -267,17 +379,74 @@ namespace HoloTable.Tracking
                 }
             }
 
-            if (entity != null)
+            if (entity == null) yield break;
+
+            entity.StopFollowing();
+            float persistence = PersistenceFor(entity.Definition.System);
+            if (persistence > 0f && entity.IsAlive)
             {
-                entity.StopFollowing();
-                entity.Despawn();
-                Log($"'{entry.Target.ReferenceName}' lost; despawning.");
+                entity.SetGhosted(true);
+                _orphans.Add(new Orphan
+                {
+                    Entity = entity,
+                    ExpiresAt = Time.time + persistence,
+                    LastPosition = entry.Target.HasAnchor ? entry.Target.Position : entity.GroundWorld,
+                });
+                Log($"'{entry.Target.ReferenceName}' lost; {entity.name} waits {persistence:0.0}s as a ghost.");
+                yield break;
             }
+
+            entity.Despawn();
+            Log($"'{entry.Target.ReferenceName}' lost; despawning.");
         }
+
+        /// <summary>Re-links a ghost to the same card (or a moved miniature) instead of spawning a clone.</summary>
+        private bool TryReattachOrphan(TargetEntry entry, EntityDefinition definition, PlayerSide side)
+        {
+            TableSpace table = TableSpace.Current;
+            int best = -1;
+            float bestDistance = float.MaxValue;
+            bool ignoreDistance = definition.System == GameSystem.Warhammer;
+
+            for (int i = 0; i < _orphans.Count; i++)
+            {
+                LivingEntityController candidate = _orphans[i].Entity;
+                if (candidate == null || !candidate.IsAlive || candidate.Definition != definition) continue;
+                if (side != PlayerSide.Neutral && candidate.Side != side && !ignoreDistance) continue;
+
+                float d = table.TableDistance(_orphans[i].LastPosition, entry.Target.Position);
+                if ((ignoreDistance || d <= reattachMaxDistance) && d < bestDistance)
+                {
+                    best = i;
+                    bestDistance = d;
+                }
+            }
+
+            if (best < 0) return false;
+
+            LivingEntityController entity = _orphans[best].Entity;
+            _orphans.RemoveAt(best);
+            entry.Entity = entity;
+            _entryByEntity[entity] = entry;
+            entity.SetGhosted(false);
+            entity.Follow(entry.Target);
+            EntityReattached?.Invoke(entity);
+            Log($"{entity.name} re-attached to '{entry.Target.ReferenceName}'.");
+            return true;
+        }
+
+        private float PersistenceFor(GameSystem system) => system switch
+        {
+            GameSystem.Pokemon => pokemonPersistence,
+            GameSystem.MagicTheGathering => mtgPersistence,
+            GameSystem.Warhammer => warhammerPersistence,
+            _ => 0f,
+        };
 
         private void OnEntityDied(LivingEntityController entity)
         {
             // KO'd while its card is still on the table: don't resurrect on re-detection.
+            RemoveOrphan(entity);
             if (_entryByEntity.TryGetValue(entity, out TargetEntry entry))
             {
                 entry.Entity = null;
@@ -291,6 +460,7 @@ namespace HoloTable.Tracking
             entity.Despawned -= OnEntityDespawned;
             entity.Died -= OnEntityDied;
             _entities.Remove(entity);
+            RemoveOrphan(entity);
             if (_entryByEntity.TryGetValue(entity, out TargetEntry entry))
             {
                 entry.Entity = null;
@@ -298,6 +468,27 @@ namespace HoloTable.Tracking
             }
 
             EntityRemoved?.Invoke(entity);
+        }
+
+        private int FindOrphanIndex(LivingEntityController entity)
+        {
+            for (int i = 0; i < _orphans.Count; i++)
+            {
+                if (_orphans[i].Entity == entity) return i;
+            }
+
+            return -1;
+        }
+
+        private void RemoveOrphan(LivingEntityController entity)
+        {
+            int index = FindOrphanIndex(entity);
+            if (index >= 0) _orphans.RemoveAt(index);
+        }
+
+        private void WarnOnce(EntityDefinition definition, string message)
+        {
+            if (_warnedDefinitions.Add(definition)) Debug.LogWarning($"[HoloTable] {message}", definition);
         }
 
         private static IGameRuleModule[] SnapshotModules() => Modules.ToArray();

@@ -27,6 +27,9 @@ namespace HoloTable.Combat
         public bool ForceRanged { get; set; }
         public bool SkipAttackAnimation { get; set; }
         public Action<AttackReport> OnResolved { get; set; }
+
+        /// <summary>Set by the combat manager once OnResolved has fired (exactly once).</summary>
+        internal bool Completed { get; set; }
     }
 
     public readonly struct AttackReport

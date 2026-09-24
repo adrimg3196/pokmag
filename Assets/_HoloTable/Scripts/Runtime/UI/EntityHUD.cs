@@ -41,6 +41,16 @@ namespace HoloTable.UI
         private float _ghostHoldUntil;
         private float _alpha;
 
+        // Last values written to each text: TMP re-layout and string formatting only on change.
+        private int _shownHp = int.MinValue;
+        private int _shownMaxHp = int.MinValue;
+        private int _shownAttack = int.MinValue;
+        private int _shownDefense = int.MinValue;
+        private int _shownResource = int.MinValue;
+        private string _shownResourceLabel;
+        private string _shownStatus;
+        private Color _shownStatusColor;
+
         public void Bind(LivingEntityController entity)
         {
             Unbind();
@@ -56,6 +66,9 @@ namespace HoloTable.UI
 
             _fill = _ghostFill = entity.Vitals.Fraction;
             _alpha = 0f;
+            _shownHp = _shownMaxHp = _shownAttack = _shownDefense = _shownResource = int.MinValue;
+            _shownResourceLabel = null;
+            _shownStatus = null;
             OnStatsChanged(entity);
             LateUpdate();
         }
@@ -75,15 +88,28 @@ namespace HoloTable.UI
             else _ghostFill = fraction;
             _fill = fraction;
 
-            if (hpText != null) hpText.text = $"{e.Vitals.Current}/{e.Vitals.Max}";
-            if (statsText != null) statsText.text = e.Definition.BuildStatLine();
-            if (resourceText != null)
+            bool hpChanged = e.Vitals.Current != _shownHp || e.Vitals.Max != _shownMaxHp;
+            if (hpChanged && hpText != null) hpText.text = $"{e.Vitals.Current}/{e.Vitals.Max}";
+
+            bool statsChanged = e.AttackValue != _shownAttack || e.DefenseValue != _shownDefense || e.Vitals.Max != _shownMaxHp;
+            if (statsChanged && statsText != null) statsText.text = e.Definition.BuildStatLine(e.AttackValue, e.DefenseValue, e.Vitals.Max);
+
+            _shownHp = e.Vitals.Current;
+            _shownMaxHp = e.Vitals.Max;
+            _shownAttack = e.AttackValue;
+            _shownDefense = e.DefenseValue;
+
+            if (resourceText != null && (e.Resource != _shownResource || e.ResourceLabel != _shownResourceLabel))
             {
+                _shownResource = e.Resource;
+                _shownResourceLabel = e.ResourceLabel;
                 resourceText.text = string.IsNullOrEmpty(e.ResourceLabel) ? "" : $"{e.ResourceLabel} {e.Resource}";
             }
 
-            if (statusText != null)
+            if (statusText != null && (e.StatusTag != _shownStatus || e.StatusColor != _shownStatusColor))
             {
+                _shownStatus = e.StatusTag;
+                _shownStatusColor = e.StatusColor;
                 statusText.text = e.StatusTag;
                 statusText.color = e.StatusColor;
                 statusText.enabled = !string.IsNullOrEmpty(e.StatusTag);

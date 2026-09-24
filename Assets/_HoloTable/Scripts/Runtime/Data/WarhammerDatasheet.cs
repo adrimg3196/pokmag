@@ -76,8 +76,8 @@ namespace HoloTable.Data
         public override float ResolveFootprintMeters(float trackedShortSide) =>
             FootprintOverrideMeters > 0f ? FootprintOverrideMeters : TableUnits.MmToMeters(baseDiameterMm);
 
-        public override string BuildStatLine() =>
-            $"M{moveInches:0}\"  T{toughness}  Sv{save}+{(invulnerableSave > 0 ? $"/{invulnerableSave}++" : "")}  W{wounds}  OC{objectiveControl}";
+        public override string BuildStatLine(int attack, int defense, int maxHp) =>
+            $"M{moveInches:0}\"  T{toughness}  Sv{save}+{(invulnerableSave > 0 ? $"/{invulnerableSave}++" : "")}  W{maxHp}  OC{objectiveControl}";
 
         private void OnValidate()
         {

@@ -157,7 +157,8 @@ namespace HoloTable.Domain.Warhammer
 
             DicePhaseResult hits = ResolveHits(random.RollD6(weapon.Attacks), weapon.Skill);
             DicePhaseResult wounds = ResolveWounds(random.RollD6(hits.Successes), weapon.Strength, target.Toughness);
-            int saveTarget = WoundRules.SaveTarget(target.Save, weapon.ArmourPenetration, target.InvulnerableSave, inCover);
+            // Benefit of Cover only applies against ranged attacks.
+            int saveTarget = WoundRules.SaveTarget(target.Save, weapon.ArmourPenetration, target.InvulnerableSave, inCover && !weapon.IsMelee);
             DicePhaseResult saves = ResolveSaves(random.RollD6(wounds.Successes), saveTarget);
 
             return new AttackSummary(hits, wounds, saves, saves.Failures, Damage(saves.Failures, weapon.Damage));
@@ -167,13 +168,15 @@ namespace HoloTable.Domain.Warhammer
         {
             if (rolls == null) throw new ArgumentNullException(nameof(rolls));
 
+            var copy = new int[rolls.Count];
             int successes = 0;
-            foreach (int roll in rolls)
+            for (int i = 0; i < copy.Length; i++)
             {
-                if (succeeds(roll, target)) successes++;
+                copy[i] = rolls[i];
+                if (succeeds(copy[i], target)) successes++;
             }
 
-            return new DicePhaseResult(rolls, target, successes);
+            return new DicePhaseResult(Array.AsReadOnly(copy), target, successes);
         }
     }
 
@@ -192,7 +195,10 @@ namespace HoloTable.Domain.Warhammer
             return visibleSamples == totalSamples ? Visibility.Clear : Visibility.PartialCover;
         }
 
-        public static bool InRange(float distanceMeters, WeaponProfile weapon) =>
-            TableUnits.MetersToInches(distanceMeters) <= weapon.RangeInches + 1e-3f;
+        public static bool InRange(float distanceMeters, WeaponProfile weapon)
+        {
+            if (weapon == null) throw new ArgumentNullException(nameof(weapon));
+            return TableUnits.MetersToInches(distanceMeters) <= weapon.RangeInches + 1e-3f;
+        }
     }
 }

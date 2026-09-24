@@ -1,3 +1,4 @@
+#nullable enable
 namespace HoloTable.Domain
 {
     /// <summary>Tabletop game a physical card or miniature belongs to.</summary>
@@ -20,20 +21,21 @@ namespace HoloTable.Domain
     /// Shared elemental palette. Pokémon types map 1:1; MTG colours and Warhammer
     /// weapon flavours reuse it to pick VFX (Fire = red mana / flamers, etc.).
     /// </summary>
+    /// <remarks>Serialized as ints in card assets: only append new values, never reorder.</remarks>
     public enum ElementType
     {
         None = 0,
-        Colorless,
-        Fire,
-        Water,
-        Lightning,
-        Grass,
-        Psychic,
-        Fighting,
-        Darkness,
-        Metal,
-        Dragon,
-        Fairy,
+        Colorless = 1,
+        Fire = 2,
+        Water = 3,
+        Lightning = 4,
+        Grass = 5,
+        Psychic = 6,
+        Fighting = 7,
+        Darkness = 8,
+        Metal = 9,
+        Dragon = 10,
+        Fairy = 11,
     }
 
     /// <summary>Physical presence on the table. Drives the dynamic scale rules.</summary>

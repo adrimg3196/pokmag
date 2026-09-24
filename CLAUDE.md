@@ -15,6 +15,11 @@ archivos pequeños y cohesionados.
 
 ## Convenciones C# (Unity)
 
+- Versión mínima: Unity 2021.3.18 (`FindFirstObjectByType`, `UnityEngine.Pool`). Recomendado 2022.3 LTS / Unity 6.
+- Enums serializados (`ElementType`, `SizeClass`, `GameSystem`…): valores explícitos, solo añadir al final.
+- Efectos de partículas one-shot: `VfxPool.Play`, nunca `Instantiate` + `Destroy` en combate.
+- Toda espera en corrutina (dados, impactos, picos del atenuador) lleva timeout y aviso en consola.
+
 - C# 9 (sin `record struct`, sin `file`-scoped namespaces, sin `required`).
 - Campos serializados `private` + `[SerializeField]`, exponer propiedades de solo lectura.
 - `ScriptableObject` = datos inmutables en runtime; el estado vivo va en la entidad o el módulo.

@@ -13,7 +13,8 @@ tutoriales (hologramas hijos del ImageTarget):
 | El monstruo parpadea o se reinvoca al pasar la mano por encima | El SDK pierde la carta 1–3 frames | **Periodo de gracia** (`lostGraceSeconds`, 0,6 s). Si la carta vuelve antes, se cancela la muerte |
 | Aparecen hologramas “fantasma” | Falsos positivos de 1 frame | **Retardo de confirmación** (`foundConfirmDelay`, 0,12 s) antes del Spawn |
 | El modelo tiembla con el tracking | Pose cruda del SDK | El holograma **no es hijo** del target: lo sigue con suavizado exponencial y solo en *yaw* |
-| Un Pokémon KO reaparece al volver a detectar su carta | Re-detección de la misma carta | La entrada queda marcada como **“gastada”** hasta que la carta sale de la mesa |
+| Un Pokémon KO reaparece al volver a detectar su carta | Re-detección de la misma carta | La carta queda **“gastada”** y se recuerda `spentMemorySeconds` (8 s) tras retirarla: devolverla enseguida no la resucita ni vuelve a lanzar el hechizo |
+| Levantar una miniatura para moverla la “mata” y vuelve con las heridas completas | Pérdida de tracking = muerte | **Persistencia por juego**: el holograma queda como fantasma (`warhammerPersistence` 20 s, `pokemonPersistence` 2,5 s) y se **reengancha** con su estado al volver a verse |
 
 ---
 
@@ -44,8 +45,10 @@ sequenceDiagram
     SDK->>Adapter: NO_POSE / Limited
     Adapter->>Dir: ReportLost(id)
     Note over Dir: lostGraceSeconds (0,6 s)<br/>si vuelve a verse → se cancela
-    Dir->>Mod: OnTargetLost (Pokémon: modo fantasma para permitir evolución por sustitución)
-    Dir->>LEC: Despawn()
+    Dir->>Mod: OnTargetLost (un módulo puede reclamar la entidad)
+    Dir->>LEC: SetGhosted(true) durante la persistencia del juego
+    Note over Dir,LEC: si la carta/miniatura vuelve → reengancha con su estado<br/>si llega una evolución al mismo sitio → evoluciona
+    Dir->>LEC: Despawn() al expirar
     Note over LEC: trigger "Die" → 0,35 s → partículas → dissolve 0→1 → Destroy
 ```
 
@@ -55,6 +58,9 @@ Parámetros en el inspector de `HoloSpawnDirector`:
 |---|---|---|
 | `foundConfirmDelay` | 0,12 s | 0,05 en Vuforia (muy estable), 0,15–0,2 en ARCore |
 | `lostGraceSeconds` | 0,6 s | 0,4 para cartas, 1,0 para miniaturas (se tapan más con la mano) |
+| `pokemonPersistence` / `mtgPersistence` / `warhammerPersistence` | 2,5 / 0 / 20 s | Tiempo como fantasma antes de disolverse; si la misma carta (o miniatura) vuelve, se reengancha con su HP, energías y heridas |
+| `reattachMaxDistance` | 0,08 m | Las cartas solo se reenganchan cerca de donde estaban (Warhammer ignora la distancia: la miniatura se ha movido) |
+| `spentMemorySeconds` | 8 s | Una carta gastada (KO, hechizo lanzado) devuelta dentro de esta ventana se ignora |
 | `catalog` | — | `CardCatalog` maestro que incluye los de cada juego |
 | `hudPrefab` | — | Prefab con `EntityHUD` (Canvas World Space, escala 0,001) |
 

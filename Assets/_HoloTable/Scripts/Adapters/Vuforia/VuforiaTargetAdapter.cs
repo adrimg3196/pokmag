@@ -34,6 +34,13 @@ namespace HoloTable.Adapters
             _observer.OnTargetStatusChanged += OnTargetStatusChanged;
         }
 
+        private void OnDisable()
+        {
+            // Target disabled/destroyed: Vuforia sends no more statuses, so release the hologram.
+            HoloSpawnDirector director = HoloSpawnDirector.Instance;
+            if (director != null && _observer != null) director.ReportLost(InstanceId);
+        }
+
         private void OnDestroy()
         {
             if (_observer != null) _observer.OnTargetStatusChanged -= OnTargetStatusChanged;
@@ -41,7 +48,7 @@ namespace HoloTable.Adapters
 
         private void OnTargetStatusChanged(ObserverBehaviour behaviour, TargetStatus targetStatus)
         {
-            HoloSpawnDirector director = HoloSpawnDirector.Instance;
+            HoloSpawnDirector director = HoloSpawnDirector.ForAdapter(this);
             if (director == null) return;
 
             switch (targetStatus.Status)

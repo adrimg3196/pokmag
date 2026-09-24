@@ -33,6 +33,7 @@ namespace HoloTable.Games.Warhammer
 
         private readonly RaycastHit[] _hits = new RaycastHit[16];
         private LineRenderer _line;
+        private Material _ownedMaterial;
 
         public Visibility LastVisibility { get; private set; } = Visibility.Blocked;
         public int LastVisibleSamples { get; private set; }
@@ -43,9 +44,18 @@ namespace HoloTable.Games.Warhammer
             _line.positionCount = 2;
             _line.useWorldSpace = true;
             _line.numCapVertices = 4;
-            if (_line.sharedMaterial == null) _line.sharedMaterial = HoloMaterials.CreateUnlitTransparent(Color.white, 3002);
+            if (_line.sharedMaterial == null)
+            {
+                _ownedMaterial = HoloMaterials.CreateUnlitTransparent(Color.white, 3002);
+                _line.sharedMaterial = _ownedMaterial;
+            }
             _line.enabled = false;
             if (impactMarker != null) impactMarker.gameObject.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (_ownedMaterial != null) Destroy(_ownedMaterial);
         }
 
         public void Hide()

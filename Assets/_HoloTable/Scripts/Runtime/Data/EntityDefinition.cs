@@ -49,7 +49,7 @@ namespace HoloTable.Data
         public virtual float ResolveFootprintMeters(float trackedShortSide) =>
             footprintOverrideMeters > 0f ? footprintOverrideMeters : trackedShortSide;
 
-        /// <summary>Compact line shown under the name in the HUD.</summary>
-        public virtual string BuildStatLine() => $"ATK {BaseAttack}  DEF {BaseDefense}";
+        /// <summary>Compact line shown under the name in the HUD, built from the entity's live stats (buffs included).</summary>
+        public virtual string BuildStatLine(int attack, int defense, int maxHp) => $"ATK {attack}  DEF {defense}";
     }
 }

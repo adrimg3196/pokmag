@@ -64,7 +64,7 @@ namespace HoloTable.Games.MTG
         {
             bool peak = false;
             EnvironmentDimmer.Current.Pulse(0.75f, 0.35f, 1.3f, 0.9f, new Color(0.02f, 0.03f, 0.08f), () => peak = true);
-            while (!peak) yield return null;
+            yield return WaitForPeak(() => peak, 0.35f, spell);
 
             CollectTargets(spell, castPoint, opponent);
             Vector3 up = TableSpace.Current.Normal;
@@ -84,6 +84,7 @@ namespace HoloTable.Games.MTG
 
             foreach (LivingEntityController target in _buffer.ToArray())
             {
+                if (target == null) continue;
                 for (int i = 0; i < boltsPerTarget && target != null; i++)
                 {
                     Vector3 sky = target.TopWorld + up * boltSkyHeight + UnityEngine.Random.insideUnitSphere * 0.12f;
@@ -99,11 +100,12 @@ namespace HoloTable.Games.MTG
         {
             bool peak = false;
             EnvironmentDimmer.Current.Pulse(0.92f, 0.8f, 1.8f, 1.2f, darknessTint, () => peak = true);
-            while (!peak) yield return null;
+            yield return WaitForPeak(() => peak, 0.8f, spell);
 
             EntityRegistry.CollectBySide(opponent, _buffer);
             foreach (LivingEntityController target in _buffer.ToArray())
             {
+                if (target == null) continue; // destroyed while the previous target was hit
                 SpawnFx(darknessVfx, target.GroundWorld, target.WorldHeight);
                 HitWithoutProjectile(target, spell.SpellPower, $"-{spell.SpellPower}/-{spell.SpellPower}", darknessTint);
                 yield return new WaitForSeconds(0.15f);
@@ -178,6 +180,7 @@ namespace HoloTable.Games.MTG
 
             foreach (LivingEntityController ally in _buffer.ToArray())
             {
+                if (ally == null) continue;
                 SpawnFx(healVfx, ally.GroundWorld, ally.WorldHeight);
                 ally.Heal(spell.SpellPower);
                 yield return new WaitForSeconds(0.1f);
@@ -238,12 +241,18 @@ namespace HoloTable.Games.MTG
             });
         }
 
-        private static void SpawnFx(ParticleSystem prefab, Vector3 position, float height)
+        private static void SpawnFx(ParticleSystem prefab, Vector3 position, float height) =>
+            VfxPool.Play(prefab, position, Quaternion.identity, Mathf.Max(0.5f, height / 0.1f));
+
+        /// <summary>Waits for the dimmer peak, but never forever (another effect may own the dimmer).</summary>
+        private static IEnumerator WaitForPeak(Func<bool> reached, float fadeIn, MtgCardDefinition spell)
         {
-            if (prefab == null) return;
-            ParticleSystem fx = UnityEngine.Object.Instantiate(prefab, position, Quaternion.identity);
-            fx.transform.localScale = Vector3.one * Mathf.Max(0.5f, height / 0.1f);
-            UnityEngine.Object.Destroy(fx.gameObject, 4f);
+            float deadline = Time.time + fadeIn + 0.5f;
+            while (!reached() && Time.time < deadline) yield return null;
+            if (!reached())
+            {
+                Debug.LogWarning($"[HoloTable] Spell '{spell.DisplayName}': room-dim peak not reached in time; resolving anyway.", spell);
+            }
         }
     }
 }

@@ -29,6 +29,8 @@ namespace HoloTable.Core
                     if (_instance == null)
                     {
                         _instance = new GameObject("[TableSpace]").AddComponent<TableSpace>();
+                        Debug.LogWarning("[HoloTable] No TableSpace in the scene: using a world-aligned plane at the AR session origin. " +
+                                         "Add a TableSpace and Align() it to the detected table plane for correct dice, distances and player sides.", _instance);
                     }
                 }
 

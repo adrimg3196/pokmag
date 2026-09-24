@@ -10,12 +10,22 @@ namespace HoloTable.VFX
     public static class HoloMaterials
     {
         private static Texture2D _radialGradient;
+        private static Shader _unlitShader;
 
+        /// <summary>Runtime material; the caller owns it and must Destroy it.</summary>
         public static Material CreateUnlitTransparent(Color color, int renderQueue = 3000)
         {
-            Shader shader = Shader.Find("Sprites/Default");
-            var material = new Material(shader) { color = color, renderQueue = renderQueue };
-            return material;
+            if (_unlitShader == null)
+            {
+                _unlitShader = Shader.Find("Sprites/Default");
+                if (_unlitShader == null)
+                {
+                    Debug.LogError("[HoloTable] 'Sprites/Default' shader not found (stripped?). Add it to Always Included Shaders or assign materials explicitly.");
+                    _unlitShader = Shader.Find("Hidden/InternalErrorShader");
+                }
+            }
+
+            return new Material(_unlitShader) { color = color, renderQueue = renderQueue };
         }
 
         /// <summary>Soft round alpha falloff, generated once (contact shadows, glows).</summary>
